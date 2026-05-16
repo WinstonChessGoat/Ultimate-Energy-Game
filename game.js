@@ -186,18 +186,40 @@ function cancelMatchmaking() {
     showLoading(false);
 }
 
+const RENDER_PEER_SERVER_HOST = 'ultimate-energy-peer-server.onrender.com'; // Replace with your Render service URL
+const RENDER_PEER_SERVER_PORT = 443; // HTTPS default port
+const RENDER_PEER_SERVER_PATH = '/myapp'; // Must match the path in your index.js
+
+
+/**
+ * Helper to create a Peer with a consistent configuration
+ */
+function createPeer(id = null) {
+    const config = {
+        debug: 2,
+        config: {
+            'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                // Add TURN server credentials here if you have them (e.g., from Xirsys)
+                // { urls: "turn:your.xirsys.server", username: "your_username", credential: "your_password" }
+            ]
+        },
+        host: RENDER_PEER_SERVER_HOST,
+        port: RENDER_PEER_SERVER_PORT,
+        secure: true, // Render services are HTTPS
+        path: RENDER_PEER_SERVER_PATH
+    };
+    return id ? new Peer(id, config) : new Peer(config);
+}
+
 function hostOnlineGame() {
     isOnlineMode = true;
     isAIMode = false;
     myRole = 'p1';
     
     showLoading(true, "Creating Lobby...");
-    peer = new Peer({
-        debug: 2,
-        config: {
-            'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-        }
-    });
+    peer = createPeer();
 
     peer.on('open', (id) => {
         showLoading(true, "Lobby Created! Waiting for opponent...\nID: " + id);
@@ -222,14 +244,7 @@ function joinOnlineGame() {
     if (peer) peer.destroy();
 
     if (!hostId) {
-        // Matchmaking: Attempt to host the public lobby ID
-        peer = new Peer(lobbyId, {
-            debug: 2,
-            config: {
-                'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-            }
-        });
-
+        peer = createPeer(lobbyId);
         peer.on('open', () => {
             myRole = 'p1';
             showLoading(true, "Searching for an opponent...");
@@ -254,12 +269,7 @@ function joinOnlineGame() {
 }
 
 function joinAsGuest(targetId) {
-    peer = new Peer({
-        debug: 2,
-        config: {
-            'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
-        }
-    });
+    peer = createPeer();
 
     peer.on('open', () => {
         myRole = 'p2';
