@@ -63,12 +63,16 @@
             align-items: flex-start;
             gap: 30px;
             margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         #game-container {
             display: flex;
             gap: 20px;
             text-align: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .player-box {
@@ -121,21 +125,37 @@
         #unit-guide {
             margin-top: 30px;
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 15px;
-            max-width: 800px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            width: 95%;
+            max-width: 900px;
         }
         .unit-card {
             background: #1e1e1e;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #333;
-            font-size: 0.85em;
+            padding: 12px 8px;
+            border-radius: 10px;
+            border: 2px solid #444;
+            font-size: 0.9em;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
+            user-select: none;
+            touch-action: manipulation; /* Removes 300ms tap delay on mobile */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 0 #000;
+            opacity: 1;
         }
-        .unit-card:hover { border-color: #00ffcc; background: #2a2a2a; }
-        .unit-card:active { transform: scale(0.95); }
+        .unit-card:hover { border-color: #00ffcc; background: #252525; }
+        .unit-card:active { transform: translateY(3px); box-shadow: 0 1px 0 #000; }
+        .unit-card.disabled { 
+            opacity: 0.3; 
+            cursor: not-allowed; 
+            pointer-events: none; 
+            filter: grayscale(1);
+        }
         .unit-card span { display: block; color: #00ffcc; font-weight: bold; }
         .unit-card small { color: #888; }
 
@@ -266,7 +286,7 @@
                 <p style="font-size: 0.7em; color: #888; margin-top: 15px;">Press 'I' to close</p>
             </div>
             <div class="controls" style="margin-top: 10px;">
-                WASD: Move | Click Tree: Break | Double Click: Inventory | 'M': Toggle Move | Click Ground: Shield (Cost 1 Wood)
+                WASD: Move | Tap Tree: Break | Double Tap: Inventory | 'M': Toggle | Click Ground: Shield
             </div>
             <button class="menu-btn" style="background: #ff4444; margin-top: 10px;" onclick="goToMainMenu()">Exit World</button>
         </div>

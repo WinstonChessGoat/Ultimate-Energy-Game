@@ -33,11 +33,11 @@ function worldHash(x, y) {
 /**
  * Updates mouse movement flags based on cursor position relative to screen center.
  */
-function updateMouseMovement(e) {
+function updateMovementInput(clientX, clientY) {
     if (!isDragging || !isInWorld || movementLocked) return;
     const rect = worldCanvas.getBoundingClientRect();
-    const dx = (e.clientX - rect.left) - worldCanvas.width / 2;
-    const dy = (e.clientY - rect.top) - worldCanvas.height / 2;
+    const dx = (clientX - rect.left) - worldCanvas.width / 2;
+    const dy = (clientY - rect.top) - worldCanvas.height / 2;
     const deadzone = 20; // Radius around center where movement doesn't trigger
 
     mouseMovement.a = dx < -deadzone;
@@ -75,25 +75,21 @@ worldCanvas.addEventListener('dblclick', (e) => {
     }
 });
 
-
-
 /**
- * Universal interaction handler for Mouse and Touch
+ * Universal input start for Mouse and Touch
  */
 function handleWorldInputStart(e) {
-    if (isInWorld && (e.touches || e.button === 0)) {
+    if (!isInWorld) return;
+    if (e.touches || e.button === 0) {
         isDragging = true;
-        updateMouseMovement(e);
-
-        const rect = worldCanvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        updateMovementInput(clientX, clientY);
 
-        const mouseX = clientX - rect.left;
-        const mouseY = clientY - rect.top;
+        const rect = worldCanvas.getBoundingClientRect();
         const localPlayer = myRole === 'p1' ? p1 : p2;
-        const worldX = mouseX + (localPlayer.x - worldCanvas.width / 2);
-        const worldY = mouseY + (localPlayer.y - worldCanvas.height / 2);
+        const worldX = (clientX - rect.left) + (localPlayer.x - worldCanvas.width / 2);
+        const worldY = (clientY - rect.top) + (localPlayer.y - worldCanvas.height / 2);
 
         handleWorldInteraction(worldX, worldY);
     }
@@ -104,29 +100,42 @@ function handleWorldInteraction(worldX, worldY) {
     const treeBroken = breakTreeAtClick(worldX, worldY);
 
     if (!treeBroken && localPlayer.inventory.wood > 0 && protectiveCircleTimer <= 0) {
-            localPlayer.inventory.wood--;
-            localPlayer.energy = Math.max(0, localPlayer.energy - 1);
-            protectiveCircleTimer = 300; // 5 seconds at 60fps
-            log("System: Protective circle activated! -1 Wood");
-            updateUI();
-            
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
-                conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
-            }
+        localPlayer.inventory.wood--;
+        localPlayer.energy = Math.max(0, localPlayer.energy - 1);
+        protectiveCircleTimer = 300; // 5 seconds at 60fps
+        log("System: Protective circle activated! -1 Wood");
+        updateUI();
+        
+        if (isOnlineMode && conn) {
+            conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
+            conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
         }
     }
-});
+}
 
-window.addEventListener('mousemove', updateMouseMovement);
+function stopDragging() {
+    isDragging = false;
+    mouseMovement = { w: false, a: false, s: false, d: false };
+}
 
-window.addEventListener('mouseup', (e) => {
-    if (e.button === 0 && isDragging) {
-        isDragging = false;
-        // Clear mouse movement flags on release
-        mouseMovement = { w: false, a: false, s: false, d: false };
+worldCanvas.addEventListener('mousedown', handleWorldInputStart);
+worldCanvas.addEventListener('touchstart', (e) => {
+    if (isInWorld) {
+        e.preventDefault(); // Prevent scrolling while moving in world
+        handleWorldInputStart(e);
     }
-});
+}, { passive: false });
+
+window.addEventListener('mousemove', (e) => { if (isDragging) updateMovementInput(e.clientX, e.clientY); });
+window.addEventListener('touchmove', (e) => {
+    if (isDragging) {
+        e.preventDefault();
+        updateMovementInput(e.touches[0].clientX, e.touches[0].clientY);
+    }
+}, { passive: false });
+
+window.addEventListener('mouseup', (e) => { if (e.button === 0) stopDragging(); });
+window.addEventListener('touchend', stopDragging);
 
 /**
  * Toggles the visibility of the inventory UI and updates the counts.

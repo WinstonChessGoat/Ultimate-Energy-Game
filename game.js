@@ -41,10 +41,7 @@ window.addEventListener('keydown', (e) => {
 
     if (!p1.alive || !p2.alive) {
         if (key === 'enter') {
-            if (isOnlineMode) {
-                conn.send({ type: 'RESTART' });
-            }
-            resetGame();
+            requestRestart();
         }
         return;
     }
@@ -292,6 +289,12 @@ function setupConnection() {
         showLoading(false);
         initGame(false);
     });
+
+    conn.on('close', () => {
+        log("System: Connection lost.");
+        alert("Opponent disconnected.");
+        goToMainMenu();
+    });
 }
 
 function handleCombatKeys(key) {
@@ -324,6 +327,17 @@ function handleUnitClick(unitId) {
         // Local or AI Mode: Buttons control Player 1
         if (p1.choice === null) selectMove('p1', unitId);
     }
+}
+
+/**
+ * Synchronized restart for Multiplayer and Local
+ */
+function requestRestart() {
+    if (!confirm('Restart Game?')) return;
+    if (isOnlineMode && conn) {
+        conn.send({ type: 'RESTART' });
+    }
+    resetGame();
 }
 
 // Expose global functions for world.js to use
@@ -632,6 +646,16 @@ function checkKill(attacker, defender) {
 }
 
 function updateUI() {
+    // Refresh Dashboard Buttons (Affordability)
+    const localPlayer = isOnlineMode ? (myRole === 'p1' ? p1 : p2) : p1;
+    for (let id = 1; id <= 9; id++) {
+        const btn = document.getElementById(`unit-btn-${id}`);
+        if (btn) {
+            if (UNITS[id].cost > localPlayer.energy) btn.classList.add('disabled');
+            else btn.classList.remove('disabled');
+        }
+    }
+
     // Update game-screen UI elements
     const p1EnergyEl = document.getElementById('p1-energy');
     if (p1EnergyEl) p1EnergyEl.innerText = p1.energy;
@@ -671,6 +695,11 @@ function endGame() {
     else if (!p1.alive) log("GAME OVER: PLAYER 2 VICTORIOUS!");
     else if (!p2.alive) {
         log("GAME OVER: PLAYER 1 VICTORIOUS!");
+    }
+
+    // Award local score in Multiplayer or AI Mode
+    if ((!p2.alive && (isAIMode || (isOnlineMode && myRole === 'p1'))) || 
+        (!p1.alive && (isOnlineMode && myRole === 'p2'))) {
         if (isAIMode) {
             p1Score += 5;
             if (currentUser) {
