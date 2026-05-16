@@ -192,7 +192,13 @@ function hostOnlineGame() {
     myRole = 'p1';
     
     showLoading(true, "Creating Lobby...");
-    peer = new Peer();
+    peer = new Peer({
+        debug: 2,
+        config: {
+            'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+        }
+    });
+
     peer.on('open', (id) => {
         showLoading(true, "Lobby Created! Waiting for opponent...\nID: " + id);
         log(`System: Waiting for guest to join... ID: ${id}`);
@@ -217,7 +223,13 @@ function joinOnlineGame() {
 
     if (!hostId) {
         // Matchmaking: Attempt to host the public lobby ID
-        peer = new Peer(lobbyId);
+        peer = new Peer(lobbyId, {
+            debug: 2,
+            config: {
+                'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+            }
+        });
+
         peer.on('open', () => {
             myRole = 'p1';
             showLoading(true, "Searching for an opponent...");
@@ -242,7 +254,13 @@ function joinOnlineGame() {
 }
 
 function joinAsGuest(targetId) {
-    peer = new Peer();
+    peer = new Peer({
+        debug: 2,
+        config: {
+            'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+        }
+    });
+
     peer.on('open', () => {
         myRole = 'p2';
         conn = peer.connect(targetId);
