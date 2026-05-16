@@ -597,9 +597,9 @@ function checkKill(attacker, defender) {
         return (attacker >= 4 && attacker <= 8);
     }
 
-    // Rule: 1 is the money, and everything else can kill it (2-9)
+    // Rule: 1 is the money, and everything else can kill it (2-8)
     if (defender === 1) {
-        return (attacker >= 2 && attacker <= 9);
+        return (attacker >= 2 && attacker <= 8);
     }
 
     // Standard Tiers: Higher cost units kill lower cost units
