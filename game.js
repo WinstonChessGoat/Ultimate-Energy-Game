@@ -311,6 +311,21 @@ function handleCombatKeys(key) {
     }
 }
 
+/**
+ * Handles unit selection via UI button clicks (Mobile Friendly)
+ */
+function handleUnitClick(unitId) {
+    if (isInWorld) return;
+    if (!p1.alive || !p2.alive) return;
+
+    if (isOnlineMode) {
+        if ((myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
+    } else {
+        // Local or AI Mode: Buttons control Player 1
+        if (p1.choice === null) selectMove('p1', unitId);
+    }
+}
+
 // Expose global functions for world.js to use
 window.log = log;
 window.updateUI = updateUI;
@@ -597,9 +612,9 @@ function checkKill(attacker, defender) {
         return (attacker >= 4 && attacker <= 8);
     }
 
-    // Rule: 1 is the money, and everything else can kill it (2-8)
+    // Rule: 1 is the money, and everything else can kill it (2-8). 9 makes both safe.
     if (defender === 1) {
-        return (attacker >= 2 && attacker <= 8);
+        return (attacker >= 2 && attacker <= 8); 
     }
 
     // Standard Tiers: Higher cost units kill lower cost units

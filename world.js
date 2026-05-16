@@ -77,23 +77,33 @@ worldCanvas.addEventListener('dblclick', (e) => {
 
 
 
-window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && isInWorld) { // Left click
+/**
+ * Universal interaction handler for Mouse and Touch
+ */
+function handleWorldInputStart(e) {
+    if (isInWorld && (e.touches || e.button === 0)) {
         isDragging = true;
         updateMouseMovement(e);
 
         const rect = worldCanvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
         const localPlayer = myRole === 'p1' ? p1 : p2;
         const worldX = mouseX + (localPlayer.x - worldCanvas.width / 2);
         const worldY = mouseY + (localPlayer.y - worldCanvas.height / 2);
 
-        // Break tree if clicked, otherwise try to activate shield
-        const treeBroken = breakTreeAtClick(worldX, worldY);
+        handleWorldInteraction(worldX, worldY);
+    }
+}
 
-        // Activate circle if player has wood and it's not already active
-        if (!treeBroken && localPlayer.inventory.wood > 0 && protectiveCircleTimer <= 0) {
+function handleWorldInteraction(worldX, worldY) {
+    const localPlayer = myRole === 'p1' ? p1 : p2;
+    const treeBroken = breakTreeAtClick(worldX, worldY);
+
+    if (!treeBroken && localPlayer.inventory.wood > 0 && protectiveCircleTimer <= 0) {
             localPlayer.inventory.wood--;
             localPlayer.energy = Math.max(0, localPlayer.energy - 1);
             protectiveCircleTimer = 300; // 5 seconds at 60fps
@@ -294,157 +304,6 @@ function breakTreeAtClick(worldX, worldY) {
         }
     }
     return false; // No tree was broken
-}
-
-/**
- * Updates bear AI and handles collisions per chunk.
- */
-function handleBear(cx, cy, camX, camY, localPlayer) {
-    // 15% chance per chunk to have a bear
-    if (worldHash(cx + 500, cy + 500) < 0.15 && !killedBears.has(`${cx},${cy}`)) {
-        const bBaseX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
-        const bBaseY = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
-        
-        if (!bearOffsets[`${cx},${cy}`]) bearOffsets[`${cx},${cy}`] = {x: 0, y: 0};
-        const offset = bearOffsets[`${cx},${cy}`];
-        const bX = bBaseX + offset.x;
-        const bY = bBaseY + offset.y;
-        
-        const distToPlayer = Math.hypot(localPlayer.x - bX, localPlayer.y - bY);
-        
-        if (distToPlayer < 200) { // Detection range
-            const angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
-            offset.x += Math.cos(angle) * 2.5; // Bear speed
-            offset.y += Math.sin(angle) * 2.5;
-        }
-        
-        // Collision detection
-        if (protectiveCircleTimer > 0 && distToPlayer < 50 + 15) {
-            killedBears.add(`${cx},${cy}`);
-            log("System: Bear killed by protective circle!");
-        } else if (distToPlayer < 12 + 15) {
-            log("System: A bear caught you! Teleporting and losing wood...");
-            localPlayer.x = myRole === 'p1' ? 100 : 500;
-            localPlayer.y = 200;
-            localPlayer.inventory.wood = 0;
-            localPlayer.energy = 0;
-            updateUI();
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'POS', x: localPlayer.x, y: localPlayer.y });
-                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: 0 });
-                conn.send({ type: 'ENERGY_UPDATE', energy: 0 });
-            }
-        }
-        
-        drawBear(bX - camX, bY - camY);
-    }
-}
-
-function worldLoop() {
-    if (!isInWorld) {
-        requestAnimationFrame(worldLoop);
-        return;
-    }
-
-    if (protectiveCircleTimer > 0) protectiveCircleTimer--;
-
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    const opponentPlayer = myRole === 'p1' ? p2 : p1;
-
-    let moved = false;
-    if (!movementLocked) {
-        if (movement.w || mouseMovement.w) { localPlayer.y -= PLAYER_SPEED; moved = true; }
-        if (movement.s || mouseMovement.s) { localPlayer.y += PLAYER_SPEED; moved = true; }
-        if (movement.a || mouseMovement.a) { localPlayer.x -= PLAYER_SPEED; moved = true; }
-        if (movement.d || mouseMovement.d) { localPlayer.x += PLAYER_SPEED; moved = true; }
-    }
-
-    // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
-    localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
-    localPlayer.y = Math.max(-10000, Math.min(10000, localPlayer.y));
-
-    if (moved && isOnlineMode && conn) {
-        conn.send({ type: 'POS', x: localPlayer.x, y: localPlayer.y });
-    }
-
-    // Clear canvas
-    worldCtx.fillStyle = '#0a2f0a';
-    worldCtx.fillRect(0, 0, worldCanvas.width, worldCanvas.height);
-
-    // Camera is centered on the local player (first-person perspective)
-    const camX = localPlayer.x - worldCanvas.width / 2;
-    const camY = localPlayer.y - worldCanvas.height / 2;
-
-    // Draw visible chunks (trees)
-    const viewLeft = Math.floor(camX / CHUNK_SIZE);
-    const viewRight = Math.ceil((camX + worldCanvas.width) / CHUNK_SIZE);
-    const viewTop = Math.floor(camY / CHUNK_SIZE);
-    const viewBottom = Math.ceil((camY + worldCanvas.height) / CHUNK_SIZE);
-
-    for (let cx = viewLeft; cx <= viewRight; cx++) {
-        for (let cy = viewTop; cy <= viewBottom; cy++) {
-            drawChunk(cx, cy, camX, camY);
-            handleBear(cx, cy, camX, camY, localPlayer);
-        }
-    }
-
-    // Draw wood drops and handle collection
-    woodDrops = woodDrops.filter(drop => {
-        const dist = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
-        if (dist < 20) { // Player steps on wood drop
-            localPlayer.energy = Math.min(100, localPlayer.energy + drop.amount); // Cap energy at 100 per slot
-            localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + drop.amount);
-            updateUI(); // Update game UI
-            log(`System: Collected ${drop.amount} wood! Energy: ${localPlayer.energy}`);
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
-            }
-            return false; // Remove collected drop
-        }
-        return true; // Keep uncollected drops
-    });
-    drawWoodDrops(camX, camY);
-
-    // Draw Protective Circle
-    if (protectiveCircleTimer > 0) {
-        worldCtx.strokeStyle = 'rgba(0, 255, 204, 0.6)';
-        worldCtx.lineWidth = 4;
-        worldCtx.beginPath();
-        worldCtx.arc(worldCanvas.width / 2, worldCanvas.height / 2, 50, 0, Math.PI * 2);
-        worldCtx.stroke();
-    }
-
-    // Draw players
-    drawHuman(worldCanvas.width / 2, worldCanvas.height / 2, '#00ffcc', moved); // Local player is always in center
-    if (isOnlineMode) {
-        // Draw opponent relative to local player's camera
-        drawHuman(opponentPlayer.x - camX, opponentPlayer.y - camY, '#ff4444', false);
-    }
-
-    requestAnimationFrame(worldLoop);
-}
-
-worldLoop();
-        localPlayer.inventory.wood++; // Increment inventory wood when tree breaks
-
-        // Exchange 20 wood for 5 points
-        if (localPlayer.inventory.wood >= 20) {
-            localPlayer.inventory.wood -= 20;
-            p1Score += 5;
-            log("System: 20 Wood exchanged for 5 points!");
-            if (currentUser) {
-                localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
-            }
-            // Refresh backpack text if it's currently open
-            const countEl = document.getElementById('inv-wood-count');
-            if (countEl) countEl.innerText = `${localPlayer.inventory.wood} / 100`;
-        }
-
-        updateUI(); // Update UI to reflect new inventory count
-        if (isOnlineMode && conn) {
-            conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
-        }
-    }
 }
 
 /**

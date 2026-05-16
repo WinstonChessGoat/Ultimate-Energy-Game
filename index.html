@@ -131,7 +131,11 @@
             border-radius: 5px;
             border: 1px solid #333;
             font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
         }
+        .unit-card:hover { border-color: #00ffcc; background: #2a2a2a; }
+        .unit-card:active { transform: scale(0.95); }
         .unit-card span { display: block; color: #00ffcc; font-weight: bold; }
         .unit-card small { color: #888; }
 
@@ -300,43 +304,43 @@
     </div>
 
     <div id="unit-guide" class="hidden">
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(1)">
             <span>1. Charge</span>
             <small>Cost: 0 | P1: [1] | P2: [Q]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(2)">
             <span>2. Fireball</span>
             <small>Cost: 1 | P1: [2] | P2: [W]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(3)">
             <span>3. Tornado</span>
             <small>Cost: 2 | P1: [3] | P2: [E]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(4)">
             <span>4. Earthquake</span>
             <small>Cost: 3 | P1: [4] | P2: [R]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(5)">
             <span>5. Tsunami</span>
             <small>Cost: 4 | P1: [5] | P2: [T]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(6)">
             <span>6. Blackhole</span>
             <small>Cost: 5 | P1: [6] | P2: [Y]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(7)">
             <span>7. Megashield</span>
             <small>Cost: 10 | P1: [7] | P2: [U]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(8)">
             <span>8. Ultimate</span>
             <small>Cost: 12 | P1: [8] | P2: [I]</small>
         </div>
-        <div class="unit-card">
+        <div class="unit-card" onclick="handleUnitClick(9)">
             <span>9. Guard</span>
             <small>Cost: 0 | P1: [9] | P2: [O]</small>
         </div>
-        <div class="unit-card" style="border-color: #ff4444;">
+        <div class="unit-card" style="border-color: #ff4444;" onclick="if(confirm('Restart Game?')) resetGame()">
             <span>Restart</span>
             <small>Key: [Enter]</small>
         </div>
