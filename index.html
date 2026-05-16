@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Ultimate Energy Game</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #auth-screen {
+            text-align: center;
+            background: #1e1e1e;
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid #ffcc00;
+        }
+        #auth-screen input {
+            padding: 12px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background: #121212;
+            color: white;
+            font-size: 1.1em;
+            margin: 15px 0;
+            width: 250px;
+            display: block;
+            text-align: center;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #menu-screen {
+            text-align: center;
+            background: #1e1e1e;
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid #00ffcc;
+        }
+        .menu-btn {
+            background: #00ffcc;
+            color: black;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .menu-btn:hover { transform: scale(1.05); background: #00cca3; }
+        
+        #main-arena {
+            display: flex;
+            align-items: flex-start;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        #game-container {
+            display: flex;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .player-box {
+            border: 2px solid #444;
+            padding: 20px;
+            border-radius: 10px;
+            width: 200px;
+        }
+        .energy-count { font-size: 2em; color: #00ffcc; }
+        .status { margin-top: 10px; font-style: italic; color: #888; }
+
+        #log-container {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+        .log-header {
+            font-size: 0.8em;
+            color: #00ffcc;
+            margin-bottom: 5px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        #battle-log {
+            height: 320px;
+            width: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 5px;
+            border: 2px solid #333;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        #timer-display {
+            font-size: 1.5em;
+            color: #ff4444;
+            height: 30px;
+            margin-bottom: 10px;
+        }
+        .controls { color: #aaa; font-size: 0.8em; margin-top: 20px; }
+        .hidden { display: none !important; }
+        
+        #game-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #unit-guide {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            max-width: 800px;
+        }
+        .unit-card {
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #333;
+            font-size: 0.85em;
+        }
+        .unit-card span { display: block; color: #00ffcc; font-weight: bold; }
+        .unit-card small { color: #888; }
+
+        /* Loading Overlay Styles */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(18, 18, 18, 0.9); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .spinner {
+            width: 60px; height: 60px; border: 6px solid #333;
+            border-top: 6px solid #00ffcc; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-text { font-size: 1.2em; color: #00ffcc; letter-spacing: 1px; }
+
+        #inventory-overlay-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.95);
+            border: 3px solid #00ffcc;
+            padding: 25px;
+            border-radius: 15px;
+            z-index: 1100;
+            min-width: 220px;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
+        }
+        .inv-slot { border-bottom: 1px solid #333; padding: 10px 0; display: flex; justify-content: space-between; }
+
+        /* Scoreboard Styles */
+        #scoreboard-container {
+            margin-top: 30px;
+            background: #181818;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            width: 280px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #2a2a2a;
+            font-size: 0.9em;
+        }
+        .score-item:last-child { border-bottom: none; }
+        .score-item .rank { color: #888; margin-right: 10px; }
+        .score-item .name { flex-grow: 1; text-align: left; }
+        .score-item .val { color: #ffcc00; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>ULTIMATE ENERGY</h1>
+
+    <!-- Loading Screen -->
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <div id="loading-text">Searching for player...</div>
+        <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="cancelMatchmaking()">Cancel</button>
+    </div>
+
+    <div id="auth-screen">
+        <h2>Sign In</h2>
+        <p style="color: #888;">Enter a username to save your score</p>
+        <input type="text" id="username-input" placeholder="Your Name">
+        <button class="menu-btn" style="background: #ffcc00;" onclick="handleSignIn()">Sign In</button>
+    </div>
+
+    <!-- Main Hub Screen -->
+    <div id="main-menu-screen" class="hidden">
+        <h2>Main Hub</h2>
+        <div style="margin: 20px;">
+            <button class="menu-btn" style="background: #ffcc00; width: 260px;" onclick="goToWorld()">ENTER WORLD</button>
+            <p style="color: #888; font-size: 0.9em;">Explore the infinite procedural forest</p>
+        </div>
+        <div style="margin: 20px;">
+            <button class="menu-btn" style="background: #00ffcc; width: 260px;" onclick="goToBattleMenu()">ENTER BATTLE GAME</button>
+            <p style="color: #888; font-size: 0.9em;">Challenge the AI or other players</p>
+        </div>
+
+        <div id="scoreboard-container">
+            <h3 style="margin-top: 0; color: #00ffcc; border-bottom: 2px solid #00ffcc; padding-bottom: 5px;">Local Leaderboard</h3>
+            <div id="scoreboard-list">
+                <!-- Scores injected via JS -->
+            </div>
+        </div>
+
+        <button class="menu-btn" style="background: #ff4444; margin-top: 40px;" onclick="handleSignOut()">Sign Out</button>
+    </div>
+
+    <div id="menu-screen" class="hidden">
+        <h2>Select Game Mode</h2>
+        <button class="menu-btn" onclick="initGame(true)">VS AI</button>
+        <button class="menu-btn" onclick="initGame(false)">VS Player 2</button>
+        
+        <div style="margin-top: 20px; padding: 20px; border: 1px dashed #00ffcc; border-radius: 10px;">
+            <h3>Online Multiplayer</h3>
+            <button class="menu-btn" style="background: #ffcc00;" onclick="hostOnlineGame()">Host Game</button>
+            <div style="margin: 10px 0;">OR</div>
+            <input type="text" id="join-id-input" placeholder="Enter Host ID" style="padding: 10px; border-radius: 5px; border: none;">
+            <button class="menu-btn" onclick="joinOnlineGame()">Join Game</button>
+        </div>
+
+        <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 20px;">
+            <button class="menu-btn" style="background: #ff4444;" onclick="goToMainMenu()">Back to Hub</button>
+        </div>
+    </div>
+    
+    <!-- World Screen -->
+    <div id="world-screen" class="hidden">
+        <div style="text-align: center;">
+            <canvas id="worldCanvas" width="800" height="500" style="border: 4px solid #333; background: #0a2f0a; border-radius: 10px;"></canvas>
+            <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; color: #ff4444; font-weight: bold;" id="world-p2-status" class="hidden">
+                Opponent Energy: <span id="world-p2-energy">0</span>
+            </div>
+            <!-- Inventory UI -->
+            <div id="inventory-overlay-box" class="hidden">
+                <h3 style="margin-top: 0; color: #00ffcc; border-bottom: 2px solid #00ffcc; padding-bottom: 10px;">Backpack</h3>
+                <div class="inv-slot">
+                    <span>Wood Logs:</span>
+                    <span id="inv-wood-count">0</span>
+                </div>
+                <p style="font-size: 0.7em; color: #888; margin-top: 15px;">Press 'I' to close</p>
+            </div>
+            <div class="controls" style="margin-top: 10px;">
+                WASD: Move | 'B': Harvest | 'I': Inventory | Click: Shield (Cost 1 Wood)
+            </div>
+            <button class="menu-btn" style="background: #ff4444; margin-top: 10px;" onclick="goToMainMenu()">Exit World</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div id="timer-display"></div>
+        
+        <div id="main-arena">
+            <div id="game-container">
+                <div class="player-box" id="p1-box">
+                    <h2 id="p1-display-name">Player 1</h2>
+                    <div style="color: #ffcc00; font-weight: bold;">Score: <span id="p1-score">0</span></div>
+                    <div class="energy-count" id="p1-energy">0</div>
+                    <div class="status" id="p1-status">Waiting...</div>
+                </div>
+                
+                <div class="player-box" id="p2-box">
+                    <h2>Player 2</h2>
+                    <div class="energy-count" id="p2-energy">0</div>
+                    <div class="status" id="p2-status">Waiting...</div>
+                </div>
+            </div>
+
+            <div id="log-container">
+                <div class="log-header">Battle Record</div>
+                <div id="battle-log">Welcome! Choose your units to begin.</div>
+            </div>
+        </div>
+
+        <div class="controls" id="controls-text">
+            Player 1 Keys: 1-9 | Press Enter to Restart
+        </div>
+        <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
+    </div>
+
+    <div id="unit-guide" class="hidden">
+        <div class="unit-card">
+            <span>1. Charge</span>
+            <small>Cost: 0 | P1: [1] | P2: [Q]</small>
+        </div>
+        <div class="unit-card">
+            <span>2. Fireball</span>
+            <small>Cost: 1 | P1: [2] | P2: [W]</small>
+        </div>
+        <div class="unit-card">
+            <span>3. Tornado</span>
+            <small>Cost: 2 | P1: [3] | P2: [E]</small>
+        </div>
+        <div class="unit-card">
+            <span>4. Earthquake</span>
+            <small>Cost: 3 | P1: [4] | P2: [R]</small>
+        </div>
+        <div class="unit-card">
+            <span>5. Tsunami</span>
+            <small>Cost: 4 | P1: [5] | P2: [T]</small>
+        </div>
+        <div class="unit-card">
+            <span>6. Blackhole</span>
+            <small>Cost: 5 | P1: [6] | P2: [Y]</small>
+        </div>
+        <div class="unit-card">
+            <span>7. Megashield</span>
+            <small>Cost: 10 | P1: [7] | P2: [U]</small>
+        </div>
+        <div class="unit-card">
+            <span>8. Ultimate</span>
+            <small>Cost: 12 | P1: [8] | P2: [I]</small>
+        </div>
+        <div class="unit-card">
+            <span>9. Guard</span>
+            <small>Cost: 0 | P1: [9] | P2: [O]</small>
+        </div>
+        <div class="unit-card" style="border-color: #ff4444;">
+            <span>Restart</span>
+            <small>Key: [Enter]</small>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script src="world.js"></script>
+</body>
+</html>
