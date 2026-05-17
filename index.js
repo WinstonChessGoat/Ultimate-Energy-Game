@@ -9,7 +9,12 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Allows connections from any domain (GitHub Pages, localhost, etc.)
+        methods: ["GET", "POST"]
+    }
+});
 const port = process.env.PORT || 9000;
 
 // 1. Serve static files (HTML, JS, CSS) from the current folder

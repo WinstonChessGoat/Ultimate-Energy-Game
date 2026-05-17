@@ -8,6 +8,9 @@ const PANIC_TIME_LIMIT = 1;
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const ENV_NAME = IS_LOCAL ? 'LOCAL' : 'PRODUCTION';
 
+// Define your Render URL here
+const RENDER_URL = 'https://ultimate-energy-game.onrender.com';
+
 // You can use this for conditional logging or different API URLs
 console.log(`[Game] Current Environment: ${ENV_NAME}`);
 
@@ -83,7 +86,8 @@ function joinOnlineGame() {
 
 function setupSocket(roomId) {
     if (socket) socket.disconnect();
-    socket = io();
+    // Connect to local server if developing, otherwise connect to Render
+    socket = io(IS_LOCAL ? 'http://localhost:9000' : RENDER_URL);
 
     socket.emit('join-room', roomId);
 
