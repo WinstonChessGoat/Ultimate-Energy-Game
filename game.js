@@ -31,8 +31,8 @@ const UNITS = {
 const P2_KEYS = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9 };
 const P1_KEYS = { 'q': 1, 'w': 2, 'e': 3, 'r': 4, 't': 5, 'y': 6, 'u': 7, 'i': 8, 'o': 9 };
 
-let p1 = { x: 0, y: 0, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0 } };
-let p2 = { x: 0, y: 0, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0 } };
+let p1 = { x: 0, y: 0, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0, axe: 0 }, axeUsesLeft: 0 };
+let p2 = { x: 0, y: 0, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0, axe: 0 }, axeUsesLeft: 0 };
 let p1Score = 0;
 let roundCount = 1;
 let currentUser = null;
@@ -139,7 +139,12 @@ function setupSocket(roomId) {
         else if (data.type === 'SYNC_TIMER') startPanicTimer(data.latePlayer, true);
         else if (data.type === 'POS') { opp.x = data.x; opp.y = data.y; }
         else if (data.type === 'ENERGY_UPDATE') { opp.energy = data.energy; opp.inventory.wood = data.inventoryWood; updateUI(); }
-        else if (data.type === 'INVENTORY_UPDATE') { opp.inventory.wood = data.inventoryWood; updateUI(); }
+        else if (data.type === 'INVENTORY_UPDATE') { 
+            opp.inventory.wood = data.inventoryWood; 
+            if (data.inventoryAxe !== undefined) opp.inventory.axe = data.inventoryAxe;
+            if (data.inventoryDefense !== undefined) opp.inventory.defenseItems = data.inventoryDefense;
+            updateUI(); 
+        }
     };
 
     socket.onerror = (err) => {
@@ -253,8 +258,8 @@ function goToMenu() {
 }
 
 function resetGame() {
-    p1 = { x: 100, y: 200, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0 } };
-    p2 = { x: 500, y: 200, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0 } };
+    p1 = { x: 100, y: 200, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0, axe: 0 }, axeUsesLeft: 0 };
+    p2 = { x: 500, y: 200, energy: 0, choice: null, alive: true, chargeStreak: 0, attackStreak: 0, defendStreak: 0, inventory: { wood: 0, axe: 0 }, axeUsesLeft: 0 };
     roundCount = 1;
     clearTimeout(turnTimer);
     clearTimeout(aiThinkingTimeout);

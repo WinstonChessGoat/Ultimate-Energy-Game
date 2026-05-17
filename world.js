@@ -2,35 +2,64 @@
  * Infinite Forest World Engine
  */
 // Access global game state from game.js
-/* global p1, p2, p1Score, currentUser, isInWorld, isOnlineMode, myRole, socket, log, updateUI */
+/* global p1, p2, p1Score, currentUser, isInWorld, isOnlineMode, myRole, socket, log, updateUI, syncInventory */
 
 // Canvas setup
 const worldCanvas = document.getElementById('worldCanvas');
 const worldCtx = worldCanvas.getContext('2d');
 
 const CHUNK_SIZE = 400; // Pixels per chunk
-const TREE_DENSITY = 0.12; // Percentage of cells that will have a tree
+const TREE_DENSITY = 0.06; // Sparse forest for more realistic spacing
 const PLAYER_SPEED = 3; // Pixels per frame
+const SPRINT_SPEED = 10.5; // Faster than bear's 9.5
 const ROTATION_SPEED = 0.05; // Radians per frame
 const CELL_SIZE = 25; // Size of a grid cell for tree placement
 const HARVEST_TIME_REQUIRED = 180; // 3 seconds at 60fps
+const HARVEST_TIME_AXE = 90; // 1.5 seconds at 60fps
 const GRAVITY = 0.4;
 const JUMP_FORCE = 8;
 const MAX_PITCH = 50 * (Math.PI / 180); // 50 degrees in radians
 
-let movement = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false };
+let movement = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false };
 let destroyedTrees = new Set(); // Stores coordinates of cut trees
 let woodDrops = []; // Stores active wood drops
 let bearOffsets = {}; // Persistent offsets for moving bears
 let killedBears = new Set(); // Stores coordinates of killed bears
 let protectiveCircleTimer = 0; // Remaining frames for the shield
 let lastTapTime = 0; // Track timing for mobile double-taps
+let lastWPressTime = 0; // Track timing for 'w' double-taps
+let isSprinting = false; // Whether the player is sprinting
 let harvestTimer = 0; // Current progress on cutting a tree
 let currentHarvestTarget = null; // Coordinates of tree being cut
 let playerAngle = 0; // Player's horizontal orientation
 let playerZ = 0; // Player height (for jumping)
 let zVelocity = 0; // Vertical speed
 let verticalAngle = 0; // Pitch (looking up/down)
+let worldAudioCtx = null;
+
+/**
+ * Synthesizes a satisfying "plop" sound for wood collection
+ */
+function playPlopSound() {
+    if (!worldAudioCtx) worldAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (worldAudioCtx.state === 'suspended') worldAudioCtx.resume();
+
+    const osc = worldAudioCtx.createOscillator();
+    const gain = worldAudioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(500, worldAudioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(150, worldAudioCtx.currentTime + 0.1);
+
+    gain.gain.setValueAtTime(0.5, worldAudioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, worldAudioCtx.currentTime + 0.1);
+
+    osc.connect(gain);
+    gain.connect(worldAudioCtx.destination);
+
+    osc.start();
+    osc.stop(worldAudioCtx.currentTime + 0.1);
+}
 
 // Procedural hash function for deterministic tree placement across chunks
 function worldHash(x, y) {
@@ -42,6 +71,14 @@ function worldHash(x, y) {
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld) { // Only process these keys if in world mode
+        if (key === 'w' && !movement[key]) {
+            const now = Date.now();
+            if (now - lastWPressTime < 300) {
+                isSprinting = true;
+            }
+            lastWPressTime = now;
+        }
+
         movement[key] = true;
         if (key === ' ') {
             handleJump();
@@ -56,6 +93,9 @@ window.addEventListener('keyup', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld && movement[key] !== undefined) {
         movement[key] = false;
+        if (key === 'w') {
+            isSprinting = false;
+        }
     }
 });
 
@@ -188,8 +228,7 @@ function handleWorldInputEnd() {
 }
 
 function handleWorldInteraction(worldX, worldY) {
-    // In First POV, we interact with what's in front of us.
-    // Interaction logic is now handled inside the worldLoop.
+    // Shield activation moved to the backpack button for immediate effect.
 }
 
 worldCanvas.addEventListener('mousedown', handleWorldInputStart);
@@ -220,9 +259,8 @@ function toggleInventoryUI() {
 
     const isHidden = invBox.classList.contains('hidden');
     if (isHidden) {
-        const localPlayer = myRole === 'p1' ? p1 : p2;
-        document.getElementById('inv-wood-count').innerText = `${localPlayer.inventory.wood} / 100`;
         invBox.classList.remove('hidden');
+        if (typeof syncInventory === 'function') syncInventory();
     } else {
         invBox.classList.add('hidden');
     }
@@ -265,26 +303,27 @@ function drawHuman(x, y, color, isMoving) {
  * Renders a tree with 3D perspective
  */
 function drawTree3D(screenX, scale, horizonY) {
-    const trunkW = 20 * scale;
-    const trunkH = 60 * scale;
-    const leafW = 80 * scale;
+    const trunkW = 30 * scale;
+    const trunkH = 180 * scale; // Significantly taller
+    const leafW = 120 * scale;
 
     const x = worldCanvas.width / 2 + screenX;
-    const y = horizonY + (50 + playerZ) * scale; // Adjust for jump height
+    const groundY = horizonY + (80 + playerZ) * scale; 
 
     // Trunk
     worldCtx.fillStyle = '#5C4033';
-    worldCtx.fillRect(x - trunkW / 2, y, trunkW, trunkH);
+    worldCtx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
 
     // Foliage (Cone layers)
     worldCtx.fillStyle = '#2d5a27';
-    for (let i = 0; i < 3; i++) {
-        const layerY = y - (i * 30 * scale);
-        const layerW = leafW * (1 - i * 0.2);
+    const foliageTop = groundY - trunkH;
+    for (let i = 0; i < 4; i++) {
+        const layerY = foliageTop - (i * 40 * scale);
+        const layerW = leafW * (1.2 - i * 0.25);
         worldCtx.beginPath();
         worldCtx.moveTo(x - layerW / 2, layerY);
         worldCtx.lineTo(x + layerW / 2, layerY);
-        worldCtx.lineTo(x, layerY - 60 * scale);
+        worldCtx.lineTo(x, layerY - 80 * scale);
         worldCtx.fill();
     }
 }
@@ -303,18 +342,53 @@ function drawWoodDrop3D(screenX, scale, horizonY) {
 /**
  * Draws a bear in 3D
  */
-function drawBear3D(screenX, scale, horizonY) {
+function drawBear3D(screenX, scale, horizonY, isAggro = false) {
     worldCtx.save();
+    const bearScale = scale * 1.3; // Scaled to match the human character's visual height
     const x = worldCanvas.width / 2 + screenX;
-    const y = horizonY + (80 + playerZ) * scale;
-    worldCtx.translate(x, y);
-    worldCtx.scale(scale, scale);
+    const groundY = horizonY + (80 + playerZ) * scale;
+    worldCtx.translate(x, groundY);
+    worldCtx.scale(bearScale, bearScale);
 
-    worldCtx.fillStyle = '#5C4033'; // Dark brown
-    worldCtx.beginPath(); worldCtx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2); worldCtx.fill();
-    worldCtx.beginPath(); worldCtx.arc(12, -5, 8, 0, Math.PI * 2); worldCtx.fill();
-    worldCtx.beginPath(); worldCtx.arc(8, -12, 3, 0, Math.PI * 2); worldCtx.arc(16, -12, 3, 0, Math.PI * 2);
-    worldCtx.fill();
+    const walkCycle = Math.sin(Date.now() / 150);
+    const furColor = '#3d2b1f';
+    const shadowColor = '#2a1d15';
+
+    // Front-Facing Body
+    worldCtx.fillStyle = furColor;
+    worldCtx.beginPath(); worldCtx.ellipse(0, -20, 22, 28, 0, 0, Math.PI * 2); worldCtx.fill();
+    
+    // Front Legs
+    const legY = -5 + (isAggro ? walkCycle * 5 : 0);
+    worldCtx.fillRect(-18, legY, 10, 20);
+    worldCtx.fillRect(8, legY, 10, 20);
+    // Claws
+    worldCtx.fillStyle = '#111';
+    for(let i=0; i<3; i++) {
+        worldCtx.fillRect(-17 + i*3, legY + 18, 2, 4);
+        worldCtx.fillRect(9 + i*3, legY + 18, 2, 4);
+    }
+
+    // Head (Always facing player)
+    worldCtx.fillStyle = furColor;
+    worldCtx.beginPath(); worldCtx.arc(0, -45, 18, 0, Math.PI * 2); worldCtx.fill();
+    
+    // Snout
+    worldCtx.fillStyle = shadowColor;
+    worldCtx.beginPath(); worldCtx.ellipse(0, -42, 10, 8, 0, 0, Math.PI * 2); worldCtx.fill();
+    worldCtx.fillStyle = 'black';
+    worldCtx.beginPath(); worldCtx.arc(0, -42, 3, 0, Math.PI * 2); worldCtx.fill();
+
+    // Ears
+    worldCtx.fillStyle = furColor;
+    worldCtx.beginPath(); worldCtx.arc(-12, -58, 6, 0, Math.PI * 2); worldCtx.arc(12, -58, 6, 0, Math.PI * 2); worldCtx.fill();
+
+    // Eyes (Turn red when aggro)
+    worldCtx.fillStyle = isAggro ? '#ff0000' : 'white';
+    worldCtx.beginPath(); worldCtx.arc(-7, -48, 3, 0, Math.PI * 2); worldCtx.arc(7, -48, 3, 0, Math.PI * 2); worldCtx.fill();
+    worldCtx.fillStyle = 'black';
+    worldCtx.beginPath(); worldCtx.arc(-6.5, -48, 1.5, 0, Math.PI * 2); worldCtx.arc(7.5, -48, 1.5, 0, Math.PI * 2); worldCtx.fill();
+
     worldCtx.restore();
 }
 
@@ -328,36 +402,113 @@ function breakTreeAtTarget(tx, ty) {
     destroyedTrees.add(`${tx},${ty}`);
     woodDrops.push({ x: tx + CELL_SIZE / 2, y: ty + CELL_SIZE / 2, amount: 1 });
     log("System: Tree broken!");
+
+    // Axe durability logic
+    if (localPlayer.inventory.axe > 0) {
+        if (localPlayer.axeUsesLeft <= 0) {
+            localPlayer.axeUsesLeft = 50; // Initialize durability for the current axe
+        }
+        localPlayer.axeUsesLeft--;
+        if (localPlayer.axeUsesLeft <= 0) {
+            localPlayer.inventory.axe--;
+            log("System: Your axe has broken!");
+            if (typeof syncInventory === 'function') syncInventory();
+        }
+    }
     return true;
+}
+
+/**
+ * Efficiently checks if a world coordinate collides with any tree trunk
+ */
+function isCollidingWithTree(nx, ny) {
+    const trunkRadius = 22;
+    const checkRange = 30; // Small radius for performance
+    
+    const startX = Math.floor((nx - checkRange) / CELL_SIZE) * CELL_SIZE;
+    const endX = Math.ceil((nx + checkRange) / CELL_SIZE) * CELL_SIZE;
+    const startY = Math.floor((ny - checkRange) / CELL_SIZE) * CELL_SIZE;
+    const endY = Math.ceil((ny + checkRange) / CELL_SIZE) * CELL_SIZE;
+
+    for (let wx = startX; wx <= endX; wx += CELL_SIZE) {
+        for (let wy = startY; wy <= endY; wy += CELL_SIZE) {
+            if (worldHash(wx, wy) < TREE_DENSITY && !destroyedTrees.has(`${wx},${wy}`)) {
+                if (Math.hypot(nx - wx, ny - wy) < trunkRadius) return true;
+            }
+        }
+    }
+    return false;
 }
 
 /**
  * Calculates and draws bear behavior in 3D space
  */
 function processBear3D(cx, cy, localPlayer, camX, camY) {
-    // 15% chance per chunk to have a bear
-    if (worldHash(cx + 500, cy + 500) < 0.15 && !killedBears.has(`${cx},${cy}`)) {
+    // Prevent bears from spawning in chunks containing the player spawn points (0,0 and 1,0)
+    if (cy === 0 && (cx === 0 || cx === 1)) return null;
+
+    // 12% chance per chunk to have a bear (Less common for realism)
+    if (worldHash(cx + 500, cy + 500) < 0.12 && !killedBears.has(`${cx},${cy}`)) {
         const bBaseX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
         const bBaseY = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
         
-        if (!bearOffsets[`${cx},${cy}`]) bearOffsets[`${cx},${cy}`] = {x: 0, y: 0};
+        if (!bearOffsets[`${cx},${cy}`]) bearOffsets[`${cx},${cy}`] = {x: 0, y: 0, aggro: false};
         const offset = bearOffsets[`${cx},${cy}`];
         const bX = bBaseX + offset.x;
         const bY = bBaseY + offset.y;
         
         const distToPlayer = Math.hypot(localPlayer.x - bX, localPlayer.y - bY);
         
-        if (distToPlayer < 200) { // Detection range
-            const angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
-            offset.x += Math.cos(angle) * 2.5; // Bear speed
-            offset.y += Math.sin(angle) * 2.5;
+        // Detect if player is looking at bear face
+        const p = project(bX, bY, localPlayer.x, localPlayer.y, playerAngle);
+        if (p.x > 0 && Math.abs(p.y) < 50 && distToPlayer < 500) {
+            if (!offset.aggro) {
+                offset.aggro = true;
+                log("System: The bear noticed you looking!");
+            }
+        }
+
+        if (distToPlayer < 600) { // Detection range
+            let angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
+            const speed = offset.aggro ? 9.5 : 3.2; // Significantly faster: stalks faster than player, charges aggressively
+            
+            let nextX = bX + Math.cos(angle) * speed;
+            let nextY = bY + Math.sin(angle) * speed;
+
+            // Safe zone check
+            if (Math.hypot(nextX - 100, nextY - 200) > 200 && Math.hypot(nextX - 500, nextY - 200) > 200) {
+                // Smarter Pathfinding: Steering behavior to avoid trees
+                if (isCollidingWithTree(nextX, nextY)) {
+                    let steered = false;
+                    // Try alternative angles (15, 30, 45... up to 90 degrees) to find a clear path
+                    for (let i = 1; i <= 6; i++) {
+                        const steerOffset = i * 15 * (Math.PI / 180);
+                        // Check left then right
+                        if (!isCollidingWithTree(bX + Math.cos(angle - steerOffset) * speed, bY + Math.sin(angle - steerOffset) * speed)) {
+                            angle -= steerOffset; steered = true; break;
+                        }
+                        if (!isCollidingWithTree(bX + Math.cos(angle + steerOffset) * speed, bY + Math.sin(angle + steerOffset) * speed)) {
+                            angle += steerOffset; steered = true; break;
+                        }
+                    }
+                    if (steered) {
+                        offset.x += Math.cos(angle) * speed;
+                        offset.y += Math.sin(angle) * speed;
+                    }
+                } else {
+                    offset.x += Math.cos(angle) * speed;
+                    offset.y += Math.sin(angle) * speed;
+                }
+            } else {
+                offset.aggro = false;
+            }
         }
         
         // Collision detection
-        if (protectiveCircleTimer > 0 && distToPlayer < 50 + 15) {
+        if (protectiveCircleTimer > 0 && distToPlayer < 15 + 15) {
             killedBears.add(`${cx},${cy}`);
             log("System: Bear killed by protective circle!");
-        } else if (distToPlayer < 12 + 15) {
+        } else if (distToPlayer < 20 + 15) {
             log("System: A bear caught you! Teleporting and losing wood...");
             localPlayer.x = myRole === 'p1' ? 100 : 500;
             localPlayer.y = 200;
@@ -371,7 +522,7 @@ function processBear3D(cx, cy, localPlayer, camX, camY) {
             }
         }
         
-        return { type: 'bear', x: bX, y: bY };
+        return { type: 'bear', x: bX, y: bY, aggro: offset.aggro };
     }
     return null;
 }
@@ -387,15 +538,30 @@ function worldLoop() {
     const localPlayer = myRole === 'p1' ? p1 : p2;
     const opponentPlayer = myRole === 'p1' ? p2 : p1;
 
+    let nextX = localPlayer.x;
+    let nextY = localPlayer.y;
     let moved = false;
-    if (movement.w) { localPlayer.x += Math.cos(playerAngle) * PLAYER_SPEED; localPlayer.y += Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
-    if (movement.s) { localPlayer.x -= Math.cos(playerAngle) * PLAYER_SPEED; localPlayer.y -= Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
-    if (movement.a) { playerAngle -= ROTATION_SPEED; moved = true; }
-    if (movement.d) { playerAngle += ROTATION_SPEED; moved = true; }
+
+    const currentForwardSpeed = isSprinting ? SPRINT_SPEED : PLAYER_SPEED;
+
+    if (movement.w) { nextX += Math.cos(playerAngle) * currentForwardSpeed; nextY += Math.sin(playerAngle) * currentForwardSpeed; moved = true; }
+    if (movement.s) { nextX -= Math.cos(playerAngle) * PLAYER_SPEED; nextY -= Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
+    if (movement.a) { nextX += Math.sin(playerAngle) * PLAYER_SPEED; nextY -= Math.cos(playerAngle) * PLAYER_SPEED; moved = true; }
+    if (movement.d) { nextX -= Math.sin(playerAngle) * PLAYER_SPEED; nextY += Math.cos(playerAngle) * PLAYER_SPEED; moved = true; }
     
-    // Keyboard Looking
+    if (moved) {
+        // Tree collision: Stop player if walking into a trunk
+        if (!isCollidingWithTree(nextX, nextY)) {
+            localPlayer.x = nextX;
+            localPlayer.y = nextY;
+        }
+    }
+
+    // Looking logic
     if (movement.arrowup) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
     if (movement.arrowdown) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
+    if (movement.arrowleft) { playerAngle -= ROTATION_SPEED; moved = true; }
+    if (movement.arrowright) { playerAngle += ROTATION_SPEED; moved = true; }
 
     // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
@@ -447,7 +613,7 @@ function worldLoop() {
                         const p = project(wx, wy, localPlayer.x, localPlayer.y, playerAngle);
                         if (p.x > 5) {
                             objects.push({ type: 'tree', ...p, wx, wy });
-                            if (p.x < minTreeDist && Math.abs(p.y) < 50) {
+                            if (p.x < minTreeDist && Math.abs(p.y) < 15) { // Narrowed to trunk width for crosshair precision
                                 minTreeDist = p.x;
                                 nearestTree = { wx, wy };
                             }
@@ -475,15 +641,49 @@ function worldLoop() {
         if (p.x > 5) objects.push({ type: 'opponent', ...p });
     }
 
+    // Add Protective Circle segments (Circling wooden logs)
+    if (protectiveCircleTimer > 0) {
+        const numSegments = 64; // Increased density to form a solid "thin line" ring
+        const shieldRadius = 15; // Shrunk to about 6 inches (game units) around the player
+        const rotationOffset = Date.now() / 300;
+        for (let i = 0; i < numSegments; i++) {
+            const angle = (i / numSegments) * Math.PI * 2 + rotationOffset;
+            const sx = localPlayer.x + Math.cos(angle) * shieldRadius;
+            const sy = localPlayer.y + Math.sin(angle) * shieldRadius;
+            const p = project(sx, sy, localPlayer.x, localPlayer.y, playerAngle);
+            if (p.x > 2) objects.push({ type: 'shield_segment', ...p });
+        }
+    }
+
     // Sort by distance (Painter's algorithm)
     objects.sort((a, b) => b.x - a.x);
 
     // Draw objects
     objects.forEach(obj => {
         const scale = 200 / obj.x;
-        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY);
-        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY);
+        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY, obj.wx, obj.wy);
+        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY, obj.aggro);
         else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale, horizonY);
+        else if (obj.type === 'shield_segment') {
+            const x = worldCanvas.width / 2 + obj.y * scale;
+            const y = horizonY + (5 + playerZ) * scale; // Moved closer to eye level so it's visible at a 15-unit radius
+            
+            // Realistic wood texture gradient for a "higher level" look
+            const woodGrad = worldCtx.createLinearGradient(x - 10 * scale, 0, x + 10 * scale, 0);
+            woodGrad.addColorStop(0, '#3e2723');
+            woodGrad.addColorStop(0.4, '#8b4513');
+            woodGrad.addColorStop(0.5, '#d2b48c'); // Highlight for much better visibility
+            woodGrad.addColorStop(0.6, '#8b4513');
+            woodGrad.addColorStop(1, '#3e2723');
+            
+            worldCtx.fillStyle = woodGrad;
+            worldCtx.fillRect(x - 0.5 * scale, y - 5 * scale, 1 * scale, 10 * scale); // Thinner segments to suit the tight 6-inch radius
+            
+            // Add a subtle border to make the ring segments stand out
+            worldCtx.strokeStyle = 'rgba(0,0,0,0.5)';
+            worldCtx.lineWidth = 0.5 * scale;
+            worldCtx.strokeRect(x - 0.5 * scale, y - 5 * scale, 1 * scale, 10 * scale);
+        }
         else if (obj.type === 'opponent') {
             worldCtx.save();
             worldCtx.translate(worldCanvas.width/2 + obj.y * scale, horizonY + (80 + playerZ) * scale);
@@ -494,7 +694,8 @@ function worldLoop() {
     });
 
     // Harvesting Logic
-    if (movement.b && nearestTree && minTreeDist < 80) {
+    if (movement.b && nearestTree && minTreeDist < 160) { // Reach multiplied by 2 (80 -> 160)
+        const requiredTime = (localPlayer.inventory.axe > 0) ? HARVEST_TIME_AXE : HARVEST_TIME_REQUIRED;
         if (!currentHarvestTarget || currentHarvestTarget.x !== nearestTree.wx || currentHarvestTarget.y !== nearestTree.wy) {
             currentHarvestTarget = { x: nearestTree.wx, y: nearestTree.wy };
             harvestTimer = 0;
@@ -502,13 +703,13 @@ function worldLoop() {
         harvestTimer++;
         
         // Progress Bar
-        const progress = harvestTimer / HARVEST_TIME_REQUIRED;
+        const progress = harvestTimer / requiredTime;
         worldCtx.fillStyle = '#222';
         worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100, 10);
         worldCtx.fillStyle = '#00ffcc';
         worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100 * progress, 10);
 
-        if (harvestTimer >= HARVEST_TIME_REQUIRED) {
+        if (harvestTimer >= requiredTime) {
             breakTreeAtTarget(nearestTree.wx, nearestTree.wy);
             harvestTimer = 0;
             currentHarvestTarget = null;
@@ -521,14 +722,25 @@ function worldLoop() {
     // Wood collection (Distance check in 2D space)
     woodDrops = woodDrops.filter(drop => {
         const d = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
-        if (d < 30) {
+        if (d < 60) {
             localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + 1);
             localPlayer.energy = Math.min(100, localPlayer.energy + 1);
+            playPlopSound();
             updateUI();
             return false;
         }
         return true;
     });
+
+    // Draw a tiny crosshair in the middle of the screen
+    const midX = worldCanvas.width / 2;
+    const midY = worldCanvas.height / 2;
+    worldCtx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    worldCtx.lineWidth = 1;
+    worldCtx.beginPath();
+    worldCtx.moveTo(midX - 5, midY); worldCtx.lineTo(midX + 5, midY);
+    worldCtx.moveTo(midX, midY - 5); worldCtx.lineTo(midX, midY + 5);
+    worldCtx.stroke();
 
     requestAnimationFrame(worldLoop);
 }

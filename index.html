@@ -333,6 +333,17 @@
                     <span>Wood Logs:</span>
                     <span id="inv-wood-count">0</span>
                 </div>
+                <div class="inv-slot">
+                    <span>Axes:</span>
+                    <span id="inv-axe-count">0</span>
+                </div>
+                
+                <div class="trade-section">
+                    <div style="font-size: 0.7em; color: #00ffcc; font-weight: bold; margin-bottom: 5px;">TRADING POST</div>
+                    <button id="trade-score-btn" class="trade-btn" onclick="tradeWoodForScore()">20 Wood ➔ 5 Score</button>
+                    <button id="trade-axe-btn" class="trade-btn" onclick="tradeWoodForAxe()">5 Wood ➔ 1 Axe</button>
+                    <button id="trade-def-btn" class="trade-btn" onclick="tradeWoodForDefense()">1 Wood ➔ Activate Shield</button>
+                </div>
                 <p style="font-size: 0.7em; color: #888; margin-top: 15px;">Press 'I' to close</p>
             </div>
             <div class="controls" style="margin-top: 10px;">
