@@ -46,7 +46,8 @@ function goToMainMenu() {
     document.getElementById('menu-screen').classList.add('hidden');
     document.getElementById('world-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.add('hidden');
-    document.getElementById('unit-guide').classList.add('hidden'); 
+    document.getElementById('p1-unit-guide').classList.add('hidden');
+    document.getElementById('p2-unit-guide').classList.add('hidden'); 
     document.getElementById('main-menu-screen').classList.remove('hidden');
     updateScoreboard();
 }
@@ -108,7 +109,8 @@ function handleSignOut() {
     document.getElementById('main-menu-screen').classList.add('hidden');
     document.getElementById('world-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.add('hidden');
-    document.getElementById('unit-guide').classList.add('hidden');
+    document.getElementById('p1-unit-guide').classList.add('hidden');
+    document.getElementById('p2-unit-guide').classList.add('hidden');
     
     updateUI();
     log("System: Progress reset and signed out.");

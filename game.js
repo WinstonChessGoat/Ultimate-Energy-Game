@@ -49,7 +49,7 @@ window.addEventListener('keydown', (e) => {
     handleCombatKeys(key);
 });
 
-const RENDER_PEER_SERVER_HOST = 'ultimate-energy-peer-server.onrender.com'; // Replace with your Render service URL
+const RENDER_PEER_SERVER_HOST = 'ultimate-energy-game.onrender.com'; // Your actual Render URL
 const RENDER_PEER_SERVER_PORT = 443; // HTTPS default port
 const RENDER_PEER_SERVER_PATH = '/myapp'; // Must match the path in your index.js
 

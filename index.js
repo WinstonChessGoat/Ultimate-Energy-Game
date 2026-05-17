@@ -1,22 +1,23 @@
-const { PeerServer } = require('peer');
+const express = require('express');
+const http = require('http');
+const { ExpressPeerServer } = require('peer');
+const path = require('path');
 
-// Render provides the port via environment variables
+const app = express();
+const server = http.createServer(app);
 const port = process.env.PORT || 9000;
 
-const peerServer = PeerServer({
-    port: port,
-    path: '/myapp',
-    allow_discovery: true,
-    // Adding a key if you want to restrict access, 
-    // though it defaults to 'peerjs' if not specified.
+// 1. Serve static files (HTML, JS, CSS) from the current folder
+app.use(express.static(__dirname));
+
+// 2. Setup PeerServer middleware
+const peerServer = ExpressPeerServer(server, {
+    debug: true,
+    path: '/myapp'
 });
 
-peerServer.on('connection', (client) => {
-    console.log(`[${new Date().toLocaleTimeString()}] Player connected: ${client.id}`);
-});
+app.use(peerServer);
 
-peerServer.on('disconnect', (client) => {
-    console.log(`[${new Date().toLocaleTimeString()}] Player disconnected: ${client.id}`);
+server.listen(port, () => {
+    console.log(`Server is running and serving the game on port ${port}`);
 });
-
-console.log(`PeerJS Server is running on port ${port}`);
