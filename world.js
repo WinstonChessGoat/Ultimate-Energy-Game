@@ -49,55 +49,61 @@ window.addEventListener('keyup', (e) => {
 });
 
 /**
- * Joystick Controller Logic
+ * Floating Joystick Controller Logic
  */
 const joystickContainer = document.getElementById('joystick-container');
 const joystickHandle = document.getElementById('joystick-handle');
+const worldScreen = document.getElementById('world-screen');
 let joystickActive = false;
 let joystickOrigin = { x: 0, y: 0 };
 
-if (joystickContainer) {
-    const startJoystick = (e) => {
-        joystickActive = true;
-        const touch = e.touches ? e.touches[0] : e;
-        const rect = joystickContainer.getBoundingClientRect();
-        joystickOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        updateJoystick(touch.clientX, touch.clientY);
-    };
+if (worldScreen && joystickContainer) {
+    worldScreen.addEventListener('touchstart', (e) => {
+        if (!isInWorld) return;
+        const touch = e.touches[0];
+        // Only spawn joystick on the left half of the screen
+        if (touch.clientX < window.innerWidth / 2) {
+            joystickActive = true;
+            joystickOrigin = { x: touch.clientX, y: touch.clientY };
+            joystickContainer.style.display = 'block';
+            joystickContainer.style.left = `${joystickOrigin.x - 55}px`;
+            joystickContainer.style.top = `${joystickOrigin.y - 55}px`;
+            updateJoystick(touch.clientX, touch.clientY);
+        }
+    }, { passive: false });
 
-    const moveJoystick = (e) => {
+    window.addEventListener('touchmove', (e) => {
         if (!joystickActive) return;
-        const touch = e.touches ? e.touches[0] : e;
+        e.preventDefault(); // Stop page scrolling while moving
+        const touch = e.touches[0];
         updateJoystick(touch.clientX, touch.clientY);
-    };
+    }, { passive: false });
 
-    const stopJoystick = () => {
+    window.addEventListener('touchend', () => {
+        if (!joystickActive) return;
         joystickActive = false;
+        joystickContainer.style.display = 'none';
         joystickHandle.style.transform = `translate(-50%, -50%)`;
         movement.w = movement.a = movement.s = movement.d = false;
-    };
+    });
+}
 
-    const updateJoystick = (clientX, clientY) => {
-        const dx = clientX - joystickOrigin.x;
-        const dy = clientY - joystickOrigin.y;
-        const dist = Math.hypot(dx, dy);
-        const maxDist = 40;
-        const limitedDist = Math.min(dist, maxDist);
-        const angle = Math.atan2(dy, dx);
-        const moveX = Math.cos(angle) * limitedDist;
-        const moveY = Math.sin(angle) * limitedDist;
-        joystickHandle.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+function updateJoystick(clientX, clientY) {
+    const dx = clientX - joystickOrigin.x;
+    const dy = clientY - joystickOrigin.y;
+    const dist = Math.hypot(dx, dy);
+    const maxDist = 45;
+    const limitedDist = Math.min(dist, maxDist);
+    const angle = Math.atan2(dy, dx);
+    const moveX = Math.cos(angle) * limitedDist;
+    const moveY = Math.sin(angle) * limitedDist;
+    joystickHandle.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
 
-        const deadzone = 10;
-        movement.a = dx < -deadzone;
-        movement.d = dx > deadzone;
-        movement.w = dy < -deadzone;
-        movement.s = dy > deadzone;
-    };
-
-    joystickContainer.addEventListener('touchstart', startJoystick);
-    window.addEventListener('touchmove', moveJoystick, { passive: false });
-    window.addEventListener('touchend', stopJoystick);
+    const deadzone = 10;
+    movement.a = dx < -deadzone;
+    movement.d = dx > deadzone;
+    movement.w = dy < -deadzone;
+    movement.s = dy > deadzone;
 }
 
 worldCanvas.addEventListener('dblclick', (e) => {
@@ -115,6 +121,10 @@ function handleWorldInputStart(e) {
     if (e.touches || e.button === 0) {
         // Detect mobile double tap to toggle inventory
         if (e.touches) {
+            const touch = e.touches[0];
+            // If the touch is on the left side, it's for movement; ignore it here
+            if (touch.clientX < window.innerWidth / 2) return;
+
             const now = Date.now();
             if (now - lastTapTime < 300 && now - lastTapTime > 0) {
                 toggleInventoryUI();

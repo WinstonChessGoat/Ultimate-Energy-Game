@@ -190,9 +190,7 @@
 
         /* Joystick UI */
         #joystick-container {
-            position: absolute;
-            bottom: 40px;
-            left: 40px;
+            position: fixed;
             width: 110px;
             height: 110px;
             background: rgba(255, 255, 255, 0.1);
@@ -200,6 +198,8 @@
             border-radius: 50%;
             z-index: 1200;
             touch-action: none;
+            display: none; /* Hidden until touch */
+            pointer-events: none;
         }
         #joystick-handle {
             position: absolute;
