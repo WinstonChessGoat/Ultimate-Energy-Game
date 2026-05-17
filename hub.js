@@ -127,7 +127,7 @@ function showLoading(show, text = "Searching for player...") {
 }
 
 function cancelMatchmaking() {
-    if (peer) peer.destroy();
+    if (socket) socket.disconnect();
     showLoading(false);
 }
 

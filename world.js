@@ -2,7 +2,7 @@
  * Infinite Forest World Engine
  */
 // Access global game state from game.js
-/* global p1, p2, p1Score, currentUser, isInWorld, isOnlineMode, myRole, conn, log, updateUI */
+/* global p1, p2, p1Score, currentUser, isInWorld, isOnlineMode, myRole, socket, log, updateUI */
 
 // Canvas setup
 const worldCanvas = document.getElementById('worldCanvas');
@@ -332,10 +332,10 @@ function processBear3D(cx, cy, localPlayer, camX, camY) {
             localPlayer.inventory.wood = 0;
             localPlayer.energy = 0;
             updateUI();
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'POS', x: localPlayer.x, y: localPlayer.y });
-                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: 0 });
-                conn.send({ type: 'ENERGY_UPDATE', energy: 0 });
+            if (isOnlineMode && socket) {
+                socket.emit('message', { type: 'POS', x: localPlayer.x, y: localPlayer.y });
+                socket.emit('message', { type: 'INVENTORY_UPDATE', inventoryWood: 0 });
+                socket.emit('message', { type: 'ENERGY_UPDATE', energy: 0 });
             }
         }
         
@@ -365,8 +365,8 @@ function worldLoop() {
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
     localPlayer.y = Math.max(-10000, Math.min(10000, localPlayer.y));
 
-    if (moved && isOnlineMode && conn) {
-        conn.send({ type: 'POS', x: localPlayer.x, y: localPlayer.y });
+    if (moved && isOnlineMode && socket) {
+        socket.emit('message', { type: 'POS', x: localPlayer.x, y: localPlayer.y });
     }
 
     // Clear canvas

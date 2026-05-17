@@ -4,6 +4,13 @@
 
 const PANIC_TIME_LIMIT = 1;
 
+// Environment detection for the client
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const ENV_NAME = IS_LOCAL ? 'LOCAL' : 'PRODUCTION';
+
+// You can use this for conditional logging or different API URLs
+console.log(`[Game] Current Environment: ${ENV_NAME}`);
+
 const UNITS = {
     1: { name: "Charge", cost: 0 },
     2: { name: "Fireball", cost: 1 },
@@ -32,8 +39,8 @@ let isAIMode = true;
 let isOnlineMode = false;
 let isInWorld = false;
 let myRole = null; // 'p1' or 'p2'
-let peer = null;
-let conn = null;
+let socket = null;
+let currentRoomId = null;
 
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
@@ -49,144 +56,56 @@ window.addEventListener('keydown', (e) => {
     handleCombatKeys(key);
 });
 
-const RENDER_PEER_SERVER_HOST = 'ultimate-energy-game.onrender.com'; // Your actual Render URL
-const RENDER_PEER_SERVER_PORT = 443; // HTTPS default port
-const RENDER_PEER_SERVER_PATH = '/myapp'; // Must match the path in your index.js
-
-
-/**
- * Helper to create a Peer with a consistent configuration
- */
-function createPeer(id = null) {
-    const config = {
-        debug: 2,
-        config: {
-            'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                // Add TURN server credentials here if you have them (e.g., from Xirsys)
-                // { urls: "turn:your.xirsys.server", username: "your_username", credential: "your_password" }
-            ]
-        },
-        host: RENDER_PEER_SERVER_HOST,
-        port: RENDER_PEER_SERVER_PORT,
-        secure: true, // Render services are HTTPS
-        path: RENDER_PEER_SERVER_PATH
-    };
-    return id ? new Peer(id, config) : new Peer(config);
-}
-
 function hostOnlineGame() {
     isOnlineMode = true;
     isAIMode = false;
     myRole = 'p1';
+    currentRoomId = Math.random().toString(36).substr(2, 6); // Simple random ID
     
-    showLoading(true, "Contacting Signaling Server...");
-    peer = createPeer();
-
-    peer.on('open', (id) => {
-        showLoading(true, "Lobby Created! Waiting for opponent...\nID: " + id);
-        log(`System: Waiting for guest to join... ID: ${id}`);
-    });
-
-    peer.on('connection', (connection) => {
-        conn = connection;
-        setupConnection();
-    });
-
-    peer.on('error', (err) => {
-        log(`System: Connection error - ${err.type}`);
-        showLoading(false);
-    });
+    showLoading(true, "Creating Lobby...");
+    setupSocket(currentRoomId);
+    
+    showLoading(true, "Lobby Created! Waiting for opponent...\nID: " + currentRoomId);
+    log(`System: Waiting for guest to join... ID: ${currentRoomId}`);
 }
 
 function joinOnlineGame() {
     const hostId = document.getElementById('join-id-input').value.trim();
-    const lobbyId = 'ultimate-energy-matchmaking-lobby-v1';
+    currentRoomId = hostId || 'public-lobby';
     
     isOnlineMode = true;
     isAIMode = false;
+    myRole = 'p2';
 
-    showLoading(true, hostId ? "Connecting to Host..." : "Searching for Players...");
-
-    if (peer) peer.destroy();
-
-    if (!hostId) {
-        peer = createPeer(lobbyId);
-        peer.on('open', () => {
-            myRole = 'p1';
-            showLoading(true, "Searching for an opponent...");
-            log("System: Waiting in public lobby...");
-        });
-        peer.on('connection', (connection) => {
-            conn = connection;
-            setupConnection();
-        });
-        peer.on('error', (err) => {
-            if (err.type === 'id-taken') {
-                // Lobby already hosted, join it
-                joinAsGuest(lobbyId);
-            } else {
-                showLoading(false);
-                alert("Connection Error: " + err.type);
-            }
-        });
-    } else {
-        joinAsGuest(hostId);
-    }
+    showLoading(true, "Connecting to Lobby...");
+    setupSocket(currentRoomId);
 }
 
-function joinAsGuest(targetId) {
-    peer = createPeer();
+function setupSocket(roomId) {
+    if (socket) socket.disconnect();
+    socket = io();
 
-    peer.on('open', () => {
-        myRole = 'p2';
-        conn = peer.connect(targetId);
-        setupConnection();
-    });
-    peer.on('error', () => {
-        showLoading(false);
-        alert("Could not find the player/lobby.");
-    });
-}
+    socket.emit('join-room', roomId);
 
-function setupConnection() {
-    conn.on('data', (data) => {
-        if (data.type === 'MOVE') {
-            // Receive the opponent's move
-            const opponentRole = myRole === 'p1' ? 'p2' : 'p1';
-            selectMove(opponentRole, data.unitId, true);
-        } else if (data.type === 'RESTART') {
-            resetGame();
-        } else if (data.type === 'SYNC_TIMER') {
-            startPanicTimer(data.latePlayer, true);
-        }
-        else if (data.type === 'POS') {
-            const opp = myRole === 'p1' ? p2 : p1;
-            opp.x = data.x;
-            opp.y = data.y;
-            updateUI(); // Update UI to show opponent's new position (if relevant)
-        }
-        else if (data.type === 'ENERGY_UPDATE') { // Changed from WOOD_COLLECTED
-            const opp = myRole === 'p1' ? p2 : p1;
-            opp.energy = data.energy;
-            opp.inventory.wood = data.inventoryWood;
-            updateUI();
-        }
-        else if (data.type === 'INVENTORY_UPDATE') { // New type for inventory wood
-            const opp = myRole === 'p1' ? p2 : p1;
-            opp.inventory.wood = data.inventoryWood;
-            updateUI();
-        }
-    });
-    
-    conn.on('open', () => {
+    socket.on('room-ready', () => {
         log("System: Connected to opponent!");
         showLoading(false);
         initGame(false);
     });
 
-    conn.on('close', () => {
+    socket.on('message', (data) => {
+        const opponentRole = myRole === 'p1' ? 'p2' : 'p1';
+        const opp = opponentRole === 'p1' ? p1 : p2;
+
+        if (data.type === 'MOVE') selectMove(opponentRole, data.unitId, true);
+        else if (data.type === 'RESTART') resetGame();
+        else if (data.type === 'SYNC_TIMER') startPanicTimer(data.latePlayer, true);
+        else if (data.type === 'POS') { opp.x = data.x; opp.y = data.y; }
+        else if (data.type === 'ENERGY_UPDATE') { opp.energy = data.energy; opp.inventory.wood = data.inventoryWood; updateUI(); }
+        else if (data.type === 'INVENTORY_UPDATE') { opp.inventory.wood = data.inventoryWood; updateUI(); }
+    });
+
+    socket.on('opponent-disconnected', () => {
         log("System: Connection lost.");
         alert("Opponent disconnected.");
         goToMainMenu();
@@ -230,8 +149,8 @@ function handleUnitClick(playerStr, unitId) {
  */
 function requestRestart() {
     if (!confirm('Restart Game?')) return;
-    if (isOnlineMode && conn) {
-        conn.send({ type: 'RESTART' });
+    if (isOnlineMode && socket) {
+        socket.emit('message', { type: 'RESTART' });
     }
     resetGame();
 }
@@ -381,14 +300,14 @@ function selectMove(playerStr, unitId, isRemote = false) {
 
     // Broadcast move to peer
     if (isOnlineMode && !isRemote) {
-        conn.send({ type: 'MOVE', unitId: unitId });
+        socket.emit('message', { type: 'MOVE', unitId: unitId });
     }
 
     // Start "Later one lose" timer
     if (p1.choice !== null && p2.choice === null || p1.choice === null && p2.choice !== null) {
         const latePlayer = playerStr === 'p1' ? 'p2' : 'p1';
         if (isOnlineMode && !isRemote) {
-            conn.send({ type: 'SYNC_TIMER', latePlayer: latePlayer });
+            socket.emit('message', { type: 'SYNC_TIMER', latePlayer: latePlayer });
         }
         startPanicTimer(latePlayer);
     }
