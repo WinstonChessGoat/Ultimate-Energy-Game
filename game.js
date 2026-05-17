@@ -81,7 +81,7 @@ function hostOnlineGame() {
     isAIMode = false;
     myRole = 'p1';
     
-    showLoading(true, "Creating Lobby...");
+    showLoading(true, "Contacting Signaling Server...");
     peer = createPeer();
 
     peer.on('open', (id) => {
@@ -92,6 +92,11 @@ function hostOnlineGame() {
     peer.on('connection', (connection) => {
         conn = connection;
         setupConnection();
+    });
+
+    peer.on('error', (err) => {
+        log(`System: Connection error - ${err.type}`);
+        showLoading(false);
     });
 }
 

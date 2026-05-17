@@ -11,7 +11,9 @@ const worldCtx = worldCanvas.getContext('2d');
 const CHUNK_SIZE = 400; // Pixels per chunk
 const TREE_DENSITY = 0.12; // Percentage of cells that will have a tree
 const PLAYER_SPEED = 3; // Pixels per frame
+const ROTATION_SPEED = 0.05; // Radians per frame
 const CELL_SIZE = 25; // Size of a grid cell for tree placement
+const HARVEST_TIME_REQUIRED = 180; // 3 seconds at 60fps
 
 let movement = { w: false, a: false, s: false, d: false };
 let destroyedTrees = new Set(); // Stores coordinates of cut trees
@@ -20,6 +22,9 @@ let bearOffsets = {}; // Persistent offsets for moving bears
 let killedBears = new Set(); // Stores coordinates of killed bears
 let protectiveCircleTimer = 0; // Remaining frames for the shield
 let lastTapTime = 0; // Track timing for mobile double-taps
+let harvestTimer = 0; // Current progress on cutting a tree
+let currentHarvestTarget = null; // Coordinates of tree being cut
+let playerAngle = 0; // Player's horizontal orientation
 
 // Procedural hash function for deterministic tree placement across chunks
 function worldHash(x, y) {
@@ -32,9 +37,6 @@ window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld) { // Only process these keys if in world mode
         movement[key] = true;
-        if (key === 'b') {
-            harvestAtPlayerPos();
-        }
         if (key === 'i') {
             toggleInventoryUI();
         }
@@ -100,10 +102,10 @@ function updateJoystick(clientX, clientY) {
     joystickHandle.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
 
     const deadzone = 10;
-    movement.a = dx < -deadzone;
-    movement.d = dx > deadzone;
-    movement.w = dy < -deadzone;
-    movement.s = dy > deadzone;
+    movement.a = dx < -deadzone; // Rotation
+    movement.d = dx > deadzone; // Rotation
+    movement.w = dy < -deadzone; // Forward
+    movement.s = dy > deadzone; // Backward
 }
 
 worldCanvas.addEventListener('dblclick', (e) => {
@@ -119,6 +121,7 @@ function handleWorldInputStart(e) {
     if (!isInWorld || (e.target !== worldCanvas && !e.touches)) return;
 
     if (e.touches || e.button === 0) {
+        movement.b = true; // Simulate holding B for harvesting
         // Detect mobile double tap to toggle inventory
         if (e.touches) {
             const touch = e.touches[0];
@@ -146,30 +149,35 @@ function handleWorldInputStart(e) {
     }
 }
 
-function handleWorldInteraction(worldX, worldY) {
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    const treeBroken = breakTreeAtClick(worldX, worldY);
+function handleWorldInputEnd() {
+    movement.b = false;
+    harvestTimer = 0;
+    currentHarvestTarget = null;
+}
 
-    if (!treeBroken && localPlayer.inventory.wood > 0 && protectiveCircleTimer <= 0) {
-        localPlayer.inventory.wood--;
-        localPlayer.energy = Math.max(0, localPlayer.energy - 1);
-        protectiveCircleTimer = 300; // 5 seconds at 60fps
-        log("System: Protective circle activated! -1 Wood");
-        updateUI();
-        
-        if (isOnlineMode && conn) {
-            conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
-            conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
-        }
-    }
+function handleWorldInteraction(worldX, worldY) {
+    // In First POV, we interact with what's in front of us.
+    // Interaction logic is now handled inside the worldLoop.
 }
 
 worldCanvas.addEventListener('mousedown', handleWorldInputStart);
+window.addEventListener('mouseup', handleWorldInputEnd);
 worldCanvas.addEventListener('touchstart', (e) => {
-    if (isInWorld) {
-        handleWorldInputStart(e);
-    }
+    if (isInWorld) handleWorldInputStart(e);
 }, { passive: false });
+window.addEventListener('touchend', handleWorldInputEnd);
+
+/**
+ * Projects a world coordinate to screen space for 3D effect
+ */
+function project(worldX, worldY, playerX, playerY, angle) {
+    const localPlayer = myRole === 'p1' ? p1 : p2;
+    const dx = worldX - playerX;
+    const dy = worldY - playerY;
+    const rotX = dx * Math.cos(-angle) - dy * Math.sin(-angle);
+    const rotY = dx * Math.sin(-angle) + dy * Math.cos(-angle);
+    return { x: rotX, y: rotY, dist: rotX }; // x is depth, y is horizontal in First POV
+}
 
 /**
  * Toggles the visibility of the inventory UI and updates the counts.
@@ -222,126 +230,79 @@ function drawHuman(x, y, color, isMoving) {
 }
 
 /**
- * Renders a specific chunk based on world coordinates
+ * Renders a tree with 3D perspective
  */
-function drawChunk(cx, cy, camX, camY) { // Added camX, camY for camera offset
-    const startX = cx * CHUNK_SIZE;
-    const startY = cy * CHUNK_SIZE;
+function drawTree3D(screenX, scale) {
+    const trunkW = 20 * scale;
+    const trunkH = 60 * scale;
+    const leafW = 80 * scale;
 
-    for (let x = 0; x < CHUNK_SIZE; x += CELL_SIZE) {
-        for (let y = 0; y < CHUNK_SIZE; y += CELL_SIZE) {
-            const worldX = startX + x;
-            const worldY = startY + y;
-            
-            if (worldHash(worldX, worldY) < TREE_DENSITY && !destroyedTrees.has(`${worldX},${worldY}`)) {
-                const screenX = worldX - camX; // Draw relative to camera
-                const screenY = worldY - camY;
+    const x = worldCanvas.width / 2 + screenX;
+    const y = worldCanvas.height / 2 + 50 * scale; // Ground level relative to horizon
 
-                // Artificial Tree Design
-                // Trunk
-                worldCtx.fillStyle = '#5C4033';
-                worldCtx.fillRect(screenX - 4, screenY, 8, 15);
+    // Trunk
+    worldCtx.fillStyle = '#5C4033';
+    worldCtx.fillRect(x - trunkW / 2, y, trunkW, trunkH);
 
-                // Leaf layers (stylized artificial look)
-                worldCtx.fillStyle = '#2d5a27';
-                // Bottom layer
-                worldCtx.beginPath();
-                worldCtx.moveTo(screenX - 18, screenY);
-                worldCtx.lineTo(screenX + 18, screenY);
-                worldCtx.lineTo(screenX, screenY - 22);
-                worldCtx.fill();
-                // Middle layer
-                worldCtx.beginPath();
-                worldCtx.moveTo(screenX - 14, screenY - 10);
-                worldCtx.lineTo(screenX + 14, screenY - 10);
-                worldCtx.lineTo(screenX, screenY - 28);
-                worldCtx.fill();
-                // Top layer
-                worldCtx.beginPath();
-                worldCtx.moveTo(screenX - 10, screenY - 20);
-                worldCtx.lineTo(screenX + 10, screenY - 20);
-                worldCtx.lineTo(screenX, screenY - 35);
-                worldCtx.fill();
-            }
-        }
+    // Foliage (Cone layers)
+    worldCtx.fillStyle = '#2d5a27';
+    for (let i = 0; i < 3; i++) {
+        const layerY = y - (i * 30 * scale);
+        const layerW = leafW * (1 - i * 0.2);
+        worldCtx.beginPath();
+        worldCtx.moveTo(x - layerW / 2, layerY);
+        worldCtx.lineTo(x + layerW / 2, layerY);
+        worldCtx.lineTo(x, layerY - 60 * scale);
+        worldCtx.fill();
     }
 }
 
 /**
- * Draws all active wood drops.
+ * Draws a wood drop in 3D
  */
-function drawWoodDrops(camX, camY) {
-    worldCtx.fillStyle = '#8b4513'; // Brown for wood
-    woodDrops.forEach(drop => {
-        worldCtx.fillRect(drop.x - 5 - camX, drop.y - 5 - camY, 10, 10);
-    });
+function drawWoodDrop3D(screenX, scale) {
+    const size = 15 * scale;
+    const x = worldCanvas.width / 2 + screenX;
+    const y = worldCanvas.height / 2 + 100 * scale;
+    worldCtx.fillStyle = '#8b4513';
+    worldCtx.fillRect(x - size / 2, y - size / 2, size, size);
 }
 
 /**
- * Draws a bear character
+ * Draws a bear in 3D
  */
-function drawBear(x, y) {
+function drawBear3D(screenX, scale) {
     worldCtx.save();
+    const x = worldCanvas.width / 2 + screenX;
+    const y = worldCanvas.height / 2 + 80 * scale;
     worldCtx.translate(x, y);
+    worldCtx.scale(scale, scale);
+
     worldCtx.fillStyle = '#5C4033'; // Dark brown
-    // Body
-    worldCtx.beginPath();
-    worldCtx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2);
-    worldCtx.fill();
-    // Head
-    worldCtx.beginPath();
-    worldCtx.arc(12, -5, 8, 0, Math.PI * 2);
-    worldCtx.fill();
-    // Ears
-    worldCtx.beginPath();
-    worldCtx.arc(8, -12, 3, 0, Math.PI * 2);
-    worldCtx.arc(16, -12, 3, 0, Math.PI * 2);
+    worldCtx.beginPath(); worldCtx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2); worldCtx.fill();
+    worldCtx.beginPath(); worldCtx.arc(12, -5, 8, 0, Math.PI * 2); worldCtx.fill();
+    worldCtx.beginPath(); worldCtx.arc(8, -12, 3, 0, Math.PI * 2); worldCtx.arc(16, -12, 3, 0, Math.PI * 2);
     worldCtx.fill();
     worldCtx.restore();
 }
 
+function harvestAtPlayerPos() { /* Deprecated in First POV */ }
+
 /**
- * Harvests a tree at the player's current position.
+ * Core harvesting logic for the 3-second hold
  */
-function harvestAtPlayerPos() {
+function breakTreeAtTarget(tx, ty) {
     const localPlayer = myRole === 'p1' ? p1 : p2;
-    breakTreeAtClick(localPlayer.x, localPlayer.y);
+    destroyedTrees.add(`${tx},${ty}`);
+    woodDrops.push({ x: tx + CELL_SIZE / 2, y: ty + CELL_SIZE / 2, amount: 1 });
+    log("System: Tree broken!");
+    return true;
 }
 
 /**
- * Attempts to break a tree at the given world coordinates.
- * Returns true if a tree was broken, false otherwise.
+ * Calculates and draws bear behavior in 3D space
  */
-function breakTreeAtClick(worldX, worldY) {
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    
-    // Distance check: cannot break trees too far away
-    const dist = Math.hypot(localPlayer.x - worldX, localPlayer.y - worldY);
-    if (dist > 100) return false; // Increased range slightly for easier clicking
-
-    // Find the tile coordinates for the click
-    const clickTileX = Math.floor(worldX / CELL_SIZE);
-    const clickTileY = Math.floor(worldY / CELL_SIZE);
-
-    // Check a small area around the click for a tree base
-    for (let dy = 0; dy <= 2; dy++) { // Check the tile clicked and up to 2 tiles below for the tree base
-        const tx = clickTileX * CELL_SIZE;
-        const ty = (clickTileY + dy) * CELL_SIZE;
-
-        if (worldHash(tx, ty) < TREE_DENSITY && !destroyedTrees.has(`${tx},${ty}`)) {
-            destroyedTrees.add(`${tx},${ty}`);
-            woodDrops.push({ x: tx + CELL_SIZE / 2, y: ty + CELL_SIZE / 2, amount: 1 });
-            log("System: Tree broken!");
-            return true; // Tree was broken
-        }
-    }
-    return false; // No tree was broken
-}
-
-/**
- * Updates bear AI and handles collisions per chunk.
- */
-function handleBear(cx, cy, camX, camY, localPlayer) {
+function processBear3D(cx, cy, localPlayer, camX, camY) {
     // 15% chance per chunk to have a bear
     if (worldHash(cx + 500, cy + 500) < 0.15 && !killedBears.has(`${cx},${cy}`)) {
         const bBaseX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
@@ -378,8 +339,9 @@ function handleBear(cx, cy, camX, camY, localPlayer) {
             }
         }
         
-        drawBear(bX - camX, bY - camY);
+        return { type: 'bear', x: bX, y: bY };
     }
+    return null;
 }
 
 function worldLoop() {
@@ -394,10 +356,10 @@ function worldLoop() {
     const opponentPlayer = myRole === 'p1' ? p2 : p1;
 
     let moved = false;
-    if (movement.w) { localPlayer.y -= PLAYER_SPEED; moved = true; }
-    if (movement.s) { localPlayer.y += PLAYER_SPEED; moved = true; }
-    if (movement.a) { localPlayer.x -= PLAYER_SPEED; moved = true; }
-    if (movement.d) { localPlayer.x += PLAYER_SPEED; moved = true; }
+    if (movement.w) { localPlayer.x += Math.cos(playerAngle) * PLAYER_SPEED; localPlayer.y += Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
+    if (movement.s) { localPlayer.x -= Math.cos(playerAngle) * PLAYER_SPEED; localPlayer.y -= Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
+    if (movement.a) { playerAngle -= ROTATION_SPEED; moved = true; }
+    if (movement.d) { playerAngle += ROTATION_SPEED; moved = true; }
 
     // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
@@ -408,70 +370,115 @@ function worldLoop() {
     }
 
     // Clear canvas
+    worldCtx.fillStyle = '#87CEEB'; // Sky
+    worldCtx.fillRect(0, 0, worldCanvas.width, worldCanvas.height / 2);
     worldCtx.fillStyle = '#0a2f0a';
-    worldCtx.fillRect(0, 0, worldCanvas.width, worldCanvas.height);
+    worldCtx.fillRect(0, worldCanvas.height / 2, worldCanvas.width, worldCanvas.height / 2); // Grass
 
-    // Camera is centered on the local player (first-person perspective)
-    const camX = localPlayer.x - worldCanvas.width / 2;
-    const camY = localPlayer.y - worldCanvas.height / 2;
+    // Find all objects in vicinity and project them
+    let objects = [];
+    const viewRadius = 600;
+    const viewLeft = Math.floor((localPlayer.x - viewRadius) / CHUNK_SIZE);
+    const viewRight = Math.ceil((localPlayer.x + viewRadius) / CHUNK_SIZE);
+    const viewTop = Math.floor((localPlayer.y - viewRadius) / CHUNK_SIZE);
+    const viewBottom = Math.ceil((localPlayer.y + viewRadius) / CHUNK_SIZE);
 
-    // Draw visible chunks (trees)
-    const viewLeft = Math.floor(camX / CHUNK_SIZE);
-    const viewRight = Math.ceil((camX + worldCanvas.width) / CHUNK_SIZE);
-    const viewTop = Math.floor(camY / CHUNK_SIZE);
-    const viewBottom = Math.ceil((camY + worldCanvas.height) / CHUNK_SIZE);
+    let nearestTree = null;
+    let minTreeDist = Infinity;
 
+    // Gather trees and bears
     for (let cx = viewLeft; cx <= viewRight; cx++) {
         for (let cy = viewTop; cy <= viewBottom; cy++) {
-            drawChunk(cx, cy, camX, camY);
-            handleBear(cx, cy, camX, camY, localPlayer);
-        }
-    }
-
-    // Draw wood drops and handle collection
-    woodDrops = woodDrops.filter(drop => {
-        const dist = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
-        if (dist < 20) { // Player steps on wood drop
-            localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + drop.amount);
-            localPlayer.energy = Math.min(100, localPlayer.energy + drop.amount);
-
-            // Exchange 20 wood for 5 points
-            if (localPlayer.inventory.wood >= 20) {
-                localPlayer.inventory.wood -= 20;
-                p1Score += 5;
-                log("System: 20 Wood exchanged for 5 points!");
-                if (currentUser) {
-                    localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
+            for (let x = 0; x < CHUNK_SIZE; x += CELL_SIZE) {
+                for (let y = 0; y < CHUNK_SIZE; y += CELL_SIZE) {
+                    const wx = cx * CHUNK_SIZE + x;
+                    const wy = cy * CHUNK_SIZE + y;
+                    if (worldHash(wx, wy) < TREE_DENSITY && !destroyedTrees.has(`${wx},${wy}`)) {
+                        const p = project(wx, wy, localPlayer.x, localPlayer.y, playerAngle);
+                        if (p.x > 5) {
+                            objects.push({ type: 'tree', ...p, wx, wy });
+                            if (p.x < minTreeDist && Math.abs(p.y) < 50) {
+                                minTreeDist = p.x;
+                                nearestTree = { wx, wy };
+                            }
+                        }
+                    }
                 }
             }
-
-            updateUI(); // Update game UI
-            log(`System: Collected ${drop.amount} wood!`);
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
-                conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
+            const bear = processBear3D(cx, cy, localPlayer, 0, 0);
+            if (bear) {
+                const p = project(bear.x, bear.y, localPlayer.x, localPlayer.y, playerAngle);
+                if (p.x > 5) objects.push({ type: 'bear', ...p });
             }
-            return false; // Remove collected drop
         }
-        return true; // Keep uncollected drops
+    }
+
+    // Gather wood drops
+    woodDrops.forEach((drop, index) => {
+        const p = project(drop.x, drop.y, localPlayer.x, localPlayer.y, playerAngle);
+        if (p.x > 5) objects.push({ type: 'drop', ...p, index });
     });
-    drawWoodDrops(camX, camY);
 
-    // Draw Protective Circle
-    if (protectiveCircleTimer > 0) {
-        worldCtx.strokeStyle = 'rgba(0, 255, 204, 0.6)';
-        worldCtx.lineWidth = 4;
-        worldCtx.beginPath();
-        worldCtx.arc(worldCanvas.width / 2, worldCanvas.height / 2, 50, 0, Math.PI * 2);
-        worldCtx.stroke();
-    }
-
-    // Draw players
-    drawHuman(worldCanvas.width / 2, worldCanvas.height / 2, '#00ffcc', moved); // Local player is always in center
+    // Add Opponent
     if (isOnlineMode) {
-        // Draw opponent relative to local player's camera
-        drawHuman(opponentPlayer.x - camX, opponentPlayer.y - camY, '#ff4444', false);
+        const p = project(opponentPlayer.x, opponentPlayer.y, localPlayer.x, localPlayer.y, playerAngle);
+        if (p.x > 5) objects.push({ type: 'opponent', ...p });
     }
+
+    // Sort by distance (Painter's algorithm)
+    objects.sort((a, b) => b.x - a.x);
+
+    // Draw objects
+    objects.forEach(obj => {
+        const scale = 200 / obj.x;
+        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale);
+        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale);
+        else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale);
+        else if (obj.type === 'opponent') {
+            worldCtx.save();
+            worldCtx.translate(worldCanvas.width/2 + obj.y * scale, worldCanvas.height/2 + 80 * scale);
+            worldCtx.scale(scale * 2, scale * 2);
+            drawHuman(0, 0, '#ff4444', false);
+            worldCtx.restore();
+        }
+    });
+
+    // Harvesting Logic
+    if (movement.b && nearestTree && minTreeDist < 80) {
+        if (!currentHarvestTarget || currentHarvestTarget.x !== nearestTree.wx || currentHarvestTarget.y !== nearestTree.wy) {
+            currentHarvestTarget = { x: nearestTree.wx, y: nearestTree.wy };
+            harvestTimer = 0;
+        }
+        harvestTimer++;
+        
+        // Progress Bar
+        const progress = harvestTimer / HARVEST_TIME_REQUIRED;
+        worldCtx.fillStyle = '#222';
+        worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100, 10);
+        worldCtx.fillStyle = '#00ffcc';
+        worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100 * progress, 10);
+
+        if (harvestTimer >= HARVEST_TIME_REQUIRED) {
+            breakTreeAtTarget(nearestTree.wx, nearestTree.wy);
+            harvestTimer = 0;
+            currentHarvestTarget = null;
+        }
+    } else {
+        harvestTimer = 0;
+        currentHarvestTarget = null;
+    }
+
+    // Wood collection (Distance check in 2D space)
+    woodDrops = woodDrops.filter(drop => {
+        const d = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
+        if (d < 30) {
+            localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + 1);
+            localPlayer.energy = Math.min(100, localPlayer.energy + 1);
+            updateUI();
+            return false;
+        }
+        return true;
+    });
 
     requestAnimationFrame(worldLoop);
 }
