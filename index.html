@@ -122,13 +122,21 @@
             align-items: center;
         }
 
-        #unit-guide {
+        #p1-unit-guide, #p2-unit-guide {
             margin-top: 30px;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 10px;
             width: 95%;
             max-width: 900px;
+        }
+        #p2-unit-guide {
+            transform: rotate(180deg);
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+        #p1-unit-guide {
+            margin-top: 30px;
         }
         .unit-card {
             background: #1e1e1e;
@@ -321,6 +329,11 @@
     </div>
 
     <div id="game-screen" class="hidden">
+        <!-- Player 2 Controls (Top, Rotated) -->
+        <div id="p2-unit-guide" class="hidden">
+            <!-- Buttons generated via script or duplicated below -->
+        </div>
+
         <div id="timer-display"></div>
         
         <div id="main-arena">
@@ -351,44 +364,45 @@
         <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
     </div>
 
-    <div id="unit-guide" class="hidden">
-        <div class="unit-card" onclick="handleUnitClick(1)">
+    <!-- Player 1 Controls (Bottom) -->
+    <div id="p1-unit-guide" class="hidden">
+        <div class="unit-card" id="p1-unit-btn-1" onclick="handleUnitClick('p1', 1)">
             <span>1. Charge</span>
             <small>Cost: 0 | P1: [1] | P2: [Q]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(2)">
+        <div class="unit-card" id="p1-unit-btn-2" onclick="handleUnitClick('p1', 2)">
             <span>2. Fireball</span>
             <small>Cost: 1 | P1: [2] | P2: [W]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(3)">
+        <div class="unit-card" id="p1-unit-btn-3" onclick="handleUnitClick('p1', 3)">
             <span>3. Tornado</span>
             <small>Cost: 2 | P1: [3] | P2: [E]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(4)">
+        <div class="unit-card" id="p1-unit-btn-4" onclick="handleUnitClick('p1', 4)">
             <span>4. Earthquake</span>
             <small>Cost: 3 | P1: [4] | P2: [R]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(5)">
+        <div class="unit-card" id="p1-unit-btn-5" onclick="handleUnitClick('p1', 5)">
             <span>5. Tsunami</span>
             <small>Cost: 4 | P1: [5] | P2: [T]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(6)">
+        <div class="unit-card" id="p1-unit-btn-6" onclick="handleUnitClick('p1', 6)">
             <span>6. Blackhole</span>
             <small>Cost: 5 | P1: [6] | P2: [Y]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(7)">
+        <div class="unit-card" id="p1-unit-btn-7" onclick="handleUnitClick('p1', 7)">
             <span>7. Megashield</span>
             <small>Cost: 10 | P1: [7] | P2: [U]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(8)">
+        <div class="unit-card" id="p1-unit-btn-8" onclick="handleUnitClick('p1', 8)">
             <span>8. Ultimate</span>
             <small>Cost: 12 | P1: [8] | P2: [I]</small>
         </div>
-        <div class="unit-card" onclick="handleUnitClick(9)">
+        <div class="unit-card" id="p1-unit-btn-9" onclick="handleUnitClick('p1', 9)">
             <span>9. Guard</span>
             <small>Cost: 0 | P1: [9] | P2: [O]</small>
         </div>
-        <div class="unit-card" style="border-color: #ff4444;" onclick="if(confirm('Restart Game?')) resetGame()">
+        <div class="unit-card" style="border-color: #ff4444;" onclick="requestRestart()">
             <span>Restart</span>
             <small>Key: [Enter]</small>
         </div>

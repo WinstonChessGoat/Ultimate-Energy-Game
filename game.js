@@ -208,15 +208,15 @@ function handleCombatKeys(key) {
 /**
  * Handles unit selection via UI button clicks (Mobile Friendly)
  */
-function handleUnitClick(unitId) {
+function handleUnitClick(playerStr, unitId) {
     if (isInWorld) return;
     if (!p1.alive || !p2.alive) return;
 
     if (isOnlineMode) {
-        if ((myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
+        if (playerStr === myRole && (myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
     } else {
-        // Local or AI Mode: Buttons control Player 1
-        if (p1.choice === null) selectMove('p1', unitId);
+        if (playerStr === 'p1' && p1.choice === null) selectMove('p1', unitId);
+        else if (playerStr === 'p2' && !isAIMode && p2.choice === null) selectMove('p2', unitId);
     }
 }
 
@@ -239,7 +239,18 @@ function initGame(vsAI) {
     isAIMode = vsAI;
     document.getElementById('menu-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
-    document.getElementById('unit-guide').classList.remove('hidden');
+    document.getElementById('p1-unit-guide').classList.remove('hidden');
+    
+    const p2Guide = document.getElementById('p2-unit-guide');
+    if (!vsAI && !isOnlineMode) {
+        // Local PvP: Create the rotated top row for Player 2
+        p2Guide.innerHTML = document.getElementById('p1-unit-guide').innerHTML
+            .replace(/p1-unit-btn/g, 'p2-unit-btn')
+            .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
+        p2Guide.classList.remove('hidden');
+    } else {
+        p2Guide.classList.add('hidden');
+    }
     
     const controls = document.getElementById('controls-text');
     if (isOnlineMode) {
@@ -258,7 +269,8 @@ function goToMenu() {
     clearTimeout(aiThinkingTimeout);
     document.getElementById('menu-screen').classList.remove('hidden');
     document.getElementById('game-screen').classList.add('hidden');
-    document.getElementById('unit-guide').classList.add('hidden');
+    document.getElementById('p1-unit-guide').classList.add('hidden');
+    document.getElementById('p2-unit-guide').classList.add('hidden');
 }
 
 function resetGame() {
@@ -538,14 +550,16 @@ function checkKill(attacker, defender) {
 
 function updateUI() {
     // Refresh Dashboard Buttons (Affordability)
-    const localPlayer = isOnlineMode ? (myRole === 'p1' ? p1 : p2) : p1;
-    for (let id = 1; id <= 9; id++) {
-        const btn = document.getElementById(`unit-btn-${id}`);
-        if (btn) {
-            if (UNITS[id].cost > localPlayer.energy) btn.classList.add('disabled');
-            else btn.classList.remove('disabled');
+    const players = { p1, p2 };
+    ['p1', 'p2'].forEach(pKey => {
+        for (let id = 1; id <= 9; id++) {
+            const btn = document.getElementById(`${pKey}-unit-btn-${id}`);
+            if (btn) {
+                if (UNITS[id].cost > players[pKey].energy) btn.classList.add('disabled');
+                else btn.classList.remove('disabled');
+            }
         }
-    }
+    });
 
     // Update game-screen UI elements
     const p1EnergyEl = document.getElementById('p1-energy');
