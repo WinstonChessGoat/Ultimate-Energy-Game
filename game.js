@@ -176,7 +176,7 @@ function handleUnitClick(playerStr, unitId) {
     if (!p1.alive || !p2.alive) return;
 
     if (isOnlineMode) {
-        if (playerStr === myRole && (myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
+        if ((myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
     } else {
         if (playerStr === 'p1' && p1.choice === null) selectMove('p1', unitId);
         else if (playerStr === 'p2' && !isAIMode && p2.choice === null) selectMove('p2', unitId);
@@ -204,6 +204,22 @@ function initGame(vsAI) {
     document.getElementById('game-screen').classList.remove('hidden');
     document.getElementById('p1-unit-guide').classList.remove('hidden');
     
+    // Update display names to match roles
+    const p1Name = document.getElementById('p1-display-name');
+    const p2Name = document.getElementById('p2-display-name');
+    if (isOnlineMode) {
+        if (myRole === 'p1') {
+            p1Name.innerText = currentUser || "Player 1";
+            p2Name.innerText = "Opponent";
+        } else {
+            p1Name.innerText = "Opponent";
+            p2Name.innerText = currentUser || "Player 2";
+        }
+    } else {
+        p1Name.innerText = currentUser || "Player 1";
+        p2Name.innerText = isAIMode ? "AI Bot" : "Player 2";
+    }
+
     const p2Guide = document.getElementById('p2-unit-guide');
     if (!vsAI && !isOnlineMode) {
         // Local PvP: Create the rotated top row for Player 2
@@ -482,7 +498,7 @@ function resolveRound() {
         roundCount++;
         setTimeout(startRound, 1500); // Faster transitions between moves
     } else {
-        endGame();
+        setTimeout(endGame, 2000); // Allow time to see the final move's result
     }
 }
 
@@ -566,13 +582,12 @@ function endGame() {
     }
 
     // Award local score in Multiplayer or AI Mode
-    if ((!p2.alive && (isAIMode || (isOnlineMode && myRole === 'p1'))) || 
-        (!p1.alive && (isOnlineMode && myRole === 'p2'))) {
-        if (isAIMode) {
-            p1Score += 5;
-            if (currentUser) {
-                localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
-            }
+    const iWon = (myRole === 'p1' && !p2.alive) || (myRole === 'p2' && !p1.alive) || (isAIMode && !p2.alive);
+    
+    if (iWon) {
+        p1Score += 5;
+        if (currentUser) {
+            localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
         }
     }
 
