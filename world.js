@@ -19,31 +19,13 @@ let woodDrops = []; // Stores active wood drops
 let bearOffsets = {}; // Persistent offsets for moving bears
 let killedBears = new Set(); // Stores coordinates of killed bears
 let protectiveCircleTimer = 0; // Remaining frames for the shield
-let movementLocked = false; // Toggle to enable or disable character movement
-let isDragging = false; // Tracks if the player is dragging the character with the mouse
-let mouseMovement = { w: false, a: false, s: false, d: false }; // Movement flags for mouse dragging
+let lastTapTime = 0; // Track timing for mobile double-taps
 
 // Procedural hash function for deterministic tree placement across chunks
 function worldHash(x, y) {
     // Using a larger prime and a different seed for better distribution
     const h = Math.sin(x * 12345.6789 + y * 98765.4321 + 54321) * 43758.5453123;
     return h - Math.floor(h);
-}
-
-/**
- * Updates mouse movement flags based on cursor position relative to screen center.
- */
-function updateMovementInput(clientX, clientY) {
-    if (!isDragging || !isInWorld || movementLocked) return;
-    const rect = worldCanvas.getBoundingClientRect();
-    const dx = (clientX - rect.left) - worldCanvas.width / 2;
-    const dy = (clientY - rect.top) - worldCanvas.height / 2;
-    const deadzone = 20; // Radius around center where movement doesn't trigger
-
-    mouseMovement.a = dx < -deadzone;
-    mouseMovement.d = dx > deadzone;
-    mouseMovement.w = dy < -deadzone;
-    mouseMovement.s = dy > deadzone;
 }
 
 window.addEventListener('keydown', (e) => {
@@ -56,18 +38,67 @@ window.addEventListener('keydown', (e) => {
         if (key === 'i') {
             toggleInventoryUI();
         }
-        if (key === 'm') {
-            movementLocked = !movementLocked;
-            // Clear movement states when locking to prevent character from "drifting"
-            if (movementLocked) {
-                movement = { w: false, a: false, s: false, d: false };
-                mouseMovement = { w: false, a: false, s: false, d: false };
-                isDragging = false;
-            }
-            log("System: Movement " + (movementLocked ? "Locked" : "Unlocked"));
-        }
     }
 });
+
+window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (isInWorld && movement[key] !== undefined) {
+        movement[key] = false;
+    }
+});
+
+/**
+ * Joystick Controller Logic
+ */
+const joystickContainer = document.getElementById('joystick-container');
+const joystickHandle = document.getElementById('joystick-handle');
+let joystickActive = false;
+let joystickOrigin = { x: 0, y: 0 };
+
+if (joystickContainer) {
+    const startJoystick = (e) => {
+        joystickActive = true;
+        const touch = e.touches ? e.touches[0] : e;
+        const rect = joystickContainer.getBoundingClientRect();
+        joystickOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        updateJoystick(touch.clientX, touch.clientY);
+    };
+
+    const moveJoystick = (e) => {
+        if (!joystickActive) return;
+        const touch = e.touches ? e.touches[0] : e;
+        updateJoystick(touch.clientX, touch.clientY);
+    };
+
+    const stopJoystick = () => {
+        joystickActive = false;
+        joystickHandle.style.transform = `translate(-50%, -50%)`;
+        movement.w = movement.a = movement.s = movement.d = false;
+    };
+
+    const updateJoystick = (clientX, clientY) => {
+        const dx = clientX - joystickOrigin.x;
+        const dy = clientY - joystickOrigin.y;
+        const dist = Math.hypot(dx, dy);
+        const maxDist = 40;
+        const limitedDist = Math.min(dist, maxDist);
+        const angle = Math.atan2(dy, dx);
+        const moveX = Math.cos(angle) * limitedDist;
+        const moveY = Math.sin(angle) * limitedDist;
+        joystickHandle.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+
+        const deadzone = 10;
+        movement.a = dx < -deadzone;
+        movement.d = dx > deadzone;
+        movement.w = dy < -deadzone;
+        movement.s = dy > deadzone;
+    };
+
+    joystickContainer.addEventListener('touchstart', startJoystick);
+    window.addEventListener('touchmove', moveJoystick, { passive: false });
+    window.addEventListener('touchend', stopJoystick);
+}
 
 worldCanvas.addEventListener('dblclick', (e) => {
     if (isInWorld) {
@@ -79,12 +110,22 @@ worldCanvas.addEventListener('dblclick', (e) => {
  * Universal input start for Mouse and Touch
  */
 function handleWorldInputStart(e) {
-    if (!isInWorld) return;
+    if (!isInWorld || (e.target !== worldCanvas && !e.touches)) return;
+
     if (e.touches || e.button === 0) {
-        isDragging = true;
+        // Detect mobile double tap to toggle inventory
+        if (e.touches) {
+            const now = Date.now();
+            if (now - lastTapTime < 300 && now - lastTapTime > 0) {
+                toggleInventoryUI();
+                lastTapTime = 0;
+                return; // Stop processing world interaction on the second tap
+            }
+            lastTapTime = now;
+        }
+
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        updateMovementInput(clientX, clientY);
 
         const rect = worldCanvas.getBoundingClientRect();
         const localPlayer = myRole === 'p1' ? p1 : p2;
@@ -113,29 +154,12 @@ function handleWorldInteraction(worldX, worldY) {
     }
 }
 
-function stopDragging() {
-    isDragging = false;
-    mouseMovement = { w: false, a: false, s: false, d: false };
-}
-
 worldCanvas.addEventListener('mousedown', handleWorldInputStart);
 worldCanvas.addEventListener('touchstart', (e) => {
     if (isInWorld) {
-        e.preventDefault(); // Prevent scrolling while moving in world
         handleWorldInputStart(e);
     }
 }, { passive: false });
-
-window.addEventListener('mousemove', (e) => { if (isDragging) updateMovementInput(e.clientX, e.clientY); });
-window.addEventListener('touchmove', (e) => {
-    if (isDragging) {
-        e.preventDefault();
-        updateMovementInput(e.touches[0].clientX, e.touches[0].clientY);
-    }
-}, { passive: false });
-
-window.addEventListener('mouseup', (e) => { if (e.button === 0) stopDragging(); });
-window.addEventListener('touchend', stopDragging);
 
 /**
  * Toggles the visibility of the inventory UI and updates the counts.
@@ -267,6 +291,14 @@ function drawBear(x, y) {
 }
 
 /**
+ * Harvests a tree at the player's current position.
+ */
+function harvestAtPlayerPos() {
+    const localPlayer = myRole === 'p1' ? p1 : p2;
+    breakTreeAtClick(localPlayer.x, localPlayer.y);
+}
+
+/**
  * Attempts to break a tree at the given world coordinates.
  * Returns true if a tree was broken, false otherwise.
  */
@@ -289,26 +321,7 @@ function breakTreeAtClick(worldX, worldY) {
         if (worldHash(tx, ty) < TREE_DENSITY && !destroyedTrees.has(`${tx},${ty}`)) {
             destroyedTrees.add(`${tx},${ty}`);
             woodDrops.push({ x: tx + CELL_SIZE / 2, y: ty + CELL_SIZE / 2, amount: 1 });
-            log("System: Tree broken! One piece of wood dropped.");
-            localPlayer.inventory.wood++; // Increment inventory wood when tree breaks
-
-            // Exchange 20 wood for 5 points
-            if (localPlayer.inventory.wood >= 20) {
-                localPlayer.inventory.wood -= 20;
-                p1Score += 5;
-                log("System: 20 Wood exchanged for 5 points!");
-                if (currentUser) {
-                    localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
-                }
-                // Refresh backpack text if it's currently open
-                const countEl = document.getElementById('inv-wood-count');
-                if (countEl) countEl.innerText = `${localPlayer.inventory.wood} / 100`;
-            }
-
-            updateUI(); // Update UI to reflect new inventory count
-            if (isOnlineMode && conn) {
-                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
-            }
+            log("System: Tree broken!");
             return true; // Tree was broken
         }
     }
@@ -371,12 +384,10 @@ function worldLoop() {
     const opponentPlayer = myRole === 'p1' ? p2 : p1;
 
     let moved = false;
-    if (!movementLocked) {
-        if (movement.w || mouseMovement.w) { localPlayer.y -= PLAYER_SPEED; moved = true; }
-        if (movement.s || mouseMovement.s) { localPlayer.y += PLAYER_SPEED; moved = true; }
-        if (movement.a || mouseMovement.a) { localPlayer.x -= PLAYER_SPEED; moved = true; }
-        if (movement.d || mouseMovement.d) { localPlayer.x += PLAYER_SPEED; moved = true; }
-    }
+    if (movement.w) { localPlayer.y -= PLAYER_SPEED; moved = true; }
+    if (movement.s) { localPlayer.y += PLAYER_SPEED; moved = true; }
+    if (movement.a) { localPlayer.x -= PLAYER_SPEED; moved = true; }
+    if (movement.d) { localPlayer.x += PLAYER_SPEED; moved = true; }
 
     // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
@@ -411,11 +422,23 @@ function worldLoop() {
     woodDrops = woodDrops.filter(drop => {
         const dist = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
         if (dist < 20) { // Player steps on wood drop
-            localPlayer.energy = Math.min(100, localPlayer.energy + drop.amount); // Cap energy at 100 per slot
             localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + drop.amount);
+            localPlayer.energy = Math.min(100, localPlayer.energy + drop.amount);
+
+            // Exchange 20 wood for 5 points
+            if (localPlayer.inventory.wood >= 20) {
+                localPlayer.inventory.wood -= 20;
+                p1Score += 5;
+                log("System: 20 Wood exchanged for 5 points!");
+                if (currentUser) {
+                    localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
+                }
+            }
+
             updateUI(); // Update game UI
-            log(`System: Collected ${drop.amount} wood! Energy: ${localPlayer.energy}`);
+            log(`System: Collected ${drop.amount} wood!`);
             if (isOnlineMode && conn) {
+                conn.send({ type: 'INVENTORY_UPDATE', inventoryWood: localPlayer.inventory.wood });
                 conn.send({ type: 'ENERGY_UPDATE', energy: localPlayer.energy });
             }
             return false; // Remove collected drop
