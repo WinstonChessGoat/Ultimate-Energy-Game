@@ -5,11 +5,12 @@
 const PANIC_TIME_LIMIT = 1;
 
 // Environment detection for the client
-const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const ENV_NAME = IS_LOCAL ? 'LOCAL' : 'PRODUCTION';
-
 // Define your Render URL here
 const RENDER_URL = 'https://ultimate-energy-game.onrender.com';
+
+// Detect if we are on a live host (Render or GitHub Pages)
+const IS_PROD = window.location.hostname.includes('onrender.com') || window.location.hostname.includes('github.io');
+const ENV_NAME = IS_PROD ? 'PRODUCTION' : 'LOCAL';
 
 // You can use this for conditional logging or different API URLs
 console.log(`[Game] Current Environment: ${ENV_NAME}`);
@@ -85,35 +86,69 @@ function joinOnlineGame() {
 }
 
 function setupSocket(roomId) {
-    if (socket) socket.disconnect();
+    if (socket) socket.close();
+
     // Connect to local server if developing, otherwise connect to Render
-    socket = io(IS_LOCAL ? 'http://localhost:9000' : RENDER_URL);
+    const protocol = IS_PROD ? 'wss' : 'ws';
+    // Fallback to localhost if hostname is empty (e.g., opened via file://)
+    const currentHostname = window.location.hostname || 'localhost';
+    const host = IS_PROD ? RENDER_URL.replace(/^https?:\/\//, '') : `${currentHostname}:9000`;
+    const socketUrl = `${protocol}://${host}/${roomId}`;
 
-    socket.emit('join-room', roomId);
+    console.log(`[Socket] Connecting to: ${socketUrl}`);
+    console.log(`[Client] Initializing a new WebSocket instance for this session.`);
+    socket = new WebSocket(socketUrl);
 
-    socket.on('room-ready', () => {
-        log("System: Connected to opponent!");
-        showLoading(false);
-        initGame(false);
-    });
+    socket.onopen = () => {
+        console.log(`[Socket] Connected to room: ${roomId}`);
+    };
 
-    socket.on('message', (data) => {
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'assign-role') {
+            myRole = data.role;
+            console.log(`[Socket] Role assigned: ${myRole}`);
+            return;
+        }
+        if (data.type === 'room-ready') {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay.classList.contains('hidden')) return;
+            log("System: Connected to opponent!");
+            showLoading(false);
+            initGame(false);
+            return;
+        }
+        if (data.type === 'opponent-disconnected') {
+            log("System: Connection lost.");
+            alert("Opponent disconnected.");
+            goToMainMenu();
+            return;
+        }
+
         const opponentRole = myRole === 'p1' ? 'p2' : 'p1';
         const opp = opponentRole === 'p1' ? p1 : p2;
 
-        if (data.type === 'MOVE') selectMove(opponentRole, data.unitId, true);
+        if (data.type === 'ERROR') {
+            alert(data.msg);
+            showLoading(false);
+            goToMenu();
+        }
+        else if (data.type === 'MOVE') selectMove(opponentRole, data.unitId, true);
         else if (data.type === 'RESTART') resetGame();
         else if (data.type === 'SYNC_TIMER') startPanicTimer(data.latePlayer, true);
         else if (data.type === 'POS') { opp.x = data.x; opp.y = data.y; }
         else if (data.type === 'ENERGY_UPDATE') { opp.energy = data.energy; opp.inventory.wood = data.inventoryWood; updateUI(); }
         else if (data.type === 'INVENTORY_UPDATE') { opp.inventory.wood = data.inventoryWood; updateUI(); }
-    });
+    };
 
-    socket.on('opponent-disconnected', () => {
-        log("System: Connection lost.");
-        alert("Opponent disconnected.");
-        goToMainMenu();
-    });
+    socket.onerror = (err) => {
+        console.error("[Socket] Error:", err);
+    };
+
+    socket.onclose = () => {
+        console.log("[Socket] Connection closed.");
+    };
 }
 
 function handleCombatKeys(key) {
@@ -154,7 +189,7 @@ function handleUnitClick(playerStr, unitId) {
 function requestRestart() {
     if (!confirm('Restart Game?')) return;
     if (isOnlineMode && socket) {
-        socket.emit('message', { type: 'RESTART' });
+        socket.send(JSON.stringify({ type: 'RESTART' }));
     }
     resetGame();
 }
@@ -304,14 +339,14 @@ function selectMove(playerStr, unitId, isRemote = false) {
 
     // Broadcast move to peer
     if (isOnlineMode && !isRemote) {
-        socket.emit('message', { type: 'MOVE', unitId: unitId });
+        socket.send(JSON.stringify({ type: 'MOVE', unitId: unitId }));
     }
 
     // Start "Later one lose" timer
     if (p1.choice !== null && p2.choice === null || p1.choice === null && p2.choice !== null) {
         const latePlayer = playerStr === 'p1' ? 'p2' : 'p1';
         if (isOnlineMode && !isRemote) {
-            socket.emit('message', { type: 'SYNC_TIMER', latePlayer: latePlayer });
+            socket.send(JSON.stringify({ type: 'SYNC_TIMER', latePlayer: latePlayer }));
         }
         startPanicTimer(latePlayer);
     }

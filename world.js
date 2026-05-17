@@ -333,9 +333,9 @@ function processBear3D(cx, cy, localPlayer, camX, camY) {
             localPlayer.energy = 0;
             updateUI();
             if (isOnlineMode && socket) {
-                socket.emit('message', { type: 'POS', x: localPlayer.x, y: localPlayer.y });
-                socket.emit('message', { type: 'INVENTORY_UPDATE', inventoryWood: 0 });
-                socket.emit('message', { type: 'ENERGY_UPDATE', energy: 0 });
+                socket.send(JSON.stringify({ type: 'POS', x: localPlayer.x, y: localPlayer.y }));
+                socket.send(JSON.stringify({ type: 'INVENTORY_UPDATE', inventoryWood: 0 }));
+                socket.send(JSON.stringify({ type: 'ENERGY_UPDATE', energy: 0 }));
             }
         }
         
@@ -366,7 +366,7 @@ function worldLoop() {
     localPlayer.y = Math.max(-10000, Math.min(10000, localPlayer.y));
 
     if (moved && isOnlineMode && socket) {
-        socket.emit('message', { type: 'POS', x: localPlayer.x, y: localPlayer.y });
+        socket.send(JSON.stringify({ type: 'POS', x: localPlayer.x, y: localPlayer.y }));
     }
 
     // Clear canvas
