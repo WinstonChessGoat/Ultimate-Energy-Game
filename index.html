@@ -220,6 +220,19 @@
             transform: translate(-50%, -50%);
             pointer-events: none;
         }
+        #jump-btn {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 80px;
+            height: 80px;
+            background: rgba(0, 255, 204, 0.3);
+            border: 2px solid #00ffcc;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            z-index: 1200;
+        }
 
         /* Scoreboard Styles */
         #scoreboard-container {
@@ -309,6 +322,7 @@
             <div id="joystick-container">
                 <div id="joystick-handle"></div>
             </div>
+            <button id="jump-btn" class="hidden" onclick="handleJump()">JUMP</button>
             <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; color: #ff4444; font-weight: bold;" id="world-p2-status" class="hidden">
                 Opponent Energy: <span id="world-p2-energy">0</span>
             </div>
@@ -322,7 +336,7 @@
                 <p style="font-size: 0.7em; color: #888; margin-top: 15px;">Press 'I' to close</p>
             </div>
             <div class="controls" style="margin-top: 10px;">
-                WASD/Joystick: Move | Tap Tree/B: Break | Double Tap: Inventory | Click Ground: Shield
+                WASD/Joystick: Move | Space/Btn: Jump | Arrow Keys/Drag: Look | B: Break
             </div>
             <button class="menu-btn" style="background: #ff4444; margin-top: 10px;" onclick="goToMainMenu()">Exit World</button>
         </div>

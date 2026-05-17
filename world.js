@@ -14,8 +14,11 @@ const PLAYER_SPEED = 3; // Pixels per frame
 const ROTATION_SPEED = 0.05; // Radians per frame
 const CELL_SIZE = 25; // Size of a grid cell for tree placement
 const HARVEST_TIME_REQUIRED = 180; // 3 seconds at 60fps
+const GRAVITY = 0.4;
+const JUMP_FORCE = 8;
+const MAX_PITCH = 50 * (Math.PI / 180); // 50 degrees in radians
 
-let movement = { w: false, a: false, s: false, d: false };
+let movement = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false };
 let destroyedTrees = new Set(); // Stores coordinates of cut trees
 let woodDrops = []; // Stores active wood drops
 let bearOffsets = {}; // Persistent offsets for moving bears
@@ -25,6 +28,9 @@ let lastTapTime = 0; // Track timing for mobile double-taps
 let harvestTimer = 0; // Current progress on cutting a tree
 let currentHarvestTarget = null; // Coordinates of tree being cut
 let playerAngle = 0; // Player's horizontal orientation
+let playerZ = 0; // Player height (for jumping)
+let zVelocity = 0; // Vertical speed
+let verticalAngle = 0; // Pitch (looking up/down)
 
 // Procedural hash function for deterministic tree placement across chunks
 function worldHash(x, y) {
@@ -37,6 +43,9 @@ window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld) { // Only process these keys if in world mode
         movement[key] = true;
+        if (key === ' ') {
+            handleJump();
+        }
         if (key === 'i') {
             toggleInventoryUI();
         }
@@ -51,6 +60,15 @@ window.addEventListener('keyup', (e) => {
 });
 
 /**
+ * Handles jump logic for both Desktop (Space) and Mobile (Button)
+ */
+function handleJump() {
+    if (playerZ === 0) {
+        zVelocity = JUMP_FORCE;
+    }
+}
+
+/**
  * Floating Joystick Controller Logic
  */
 const joystickContainer = document.getElementById('joystick-container');
@@ -58,6 +76,8 @@ const joystickHandle = document.getElementById('joystick-handle');
 const worldScreen = document.getElementById('world-screen');
 let joystickActive = false;
 let joystickOrigin = { x: 0, y: 0 };
+let lookTouchActive = false;
+let lastTouchY = 0;
 
 if (worldScreen && joystickContainer) {
     worldScreen.addEventListener('touchstart', (e) => {
@@ -71,14 +91,25 @@ if (worldScreen && joystickContainer) {
             joystickContainer.style.left = `${joystickOrigin.x - 55}px`;
             joystickContainer.style.top = `${joystickOrigin.y - 55}px`;
             updateJoystick(touch.clientX, touch.clientY);
+        } else {
+            // Right side of screen handles looking up/down
+            lookTouchActive = true;
+            lastTouchY = touch.clientY;
         }
     }, { passive: false });
 
     window.addEventListener('touchmove', (e) => {
-        if (!joystickActive) return;
         e.preventDefault(); // Stop page scrolling while moving
         const touch = e.touches[0];
-        updateJoystick(touch.clientX, touch.clientY);
+        
+        if (joystickActive && touch.clientX < window.innerWidth / 2) {
+            updateJoystick(touch.clientX, touch.clientY);
+        } else if (lookTouchActive) {
+            const dy = touch.clientY - lastTouchY;
+            verticalAngle -= dy * 0.005; // Sensitivity
+            verticalAngle = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, verticalAngle));
+            lastTouchY = touch.clientY;
+        }
     }, { passive: false });
 
     window.addEventListener('touchend', () => {
@@ -87,6 +118,7 @@ if (worldScreen && joystickContainer) {
         joystickContainer.style.display = 'none';
         joystickHandle.style.transform = `translate(-50%, -50%)`;
         movement.w = movement.a = movement.s = movement.d = false;
+        lookTouchActive = false;
     });
 }
 
@@ -232,13 +264,13 @@ function drawHuman(x, y, color, isMoving) {
 /**
  * Renders a tree with 3D perspective
  */
-function drawTree3D(screenX, scale) {
+function drawTree3D(screenX, scale, horizonY) {
     const trunkW = 20 * scale;
     const trunkH = 60 * scale;
     const leafW = 80 * scale;
 
     const x = worldCanvas.width / 2 + screenX;
-    const y = worldCanvas.height / 2 + 50 * scale; // Ground level relative to horizon
+    const y = horizonY + (50 + playerZ) * scale; // Adjust for jump height
 
     // Trunk
     worldCtx.fillStyle = '#5C4033';
@@ -260,10 +292,10 @@ function drawTree3D(screenX, scale) {
 /**
  * Draws a wood drop in 3D
  */
-function drawWoodDrop3D(screenX, scale) {
+function drawWoodDrop3D(screenX, scale, horizonY) {
     const size = 15 * scale;
     const x = worldCanvas.width / 2 + screenX;
-    const y = worldCanvas.height / 2 + 100 * scale;
+    const y = horizonY + (100 + playerZ) * scale;
     worldCtx.fillStyle = '#8b4513';
     worldCtx.fillRect(x - size / 2, y - size / 2, size, size);
 }
@@ -271,10 +303,10 @@ function drawWoodDrop3D(screenX, scale) {
 /**
  * Draws a bear in 3D
  */
-function drawBear3D(screenX, scale) {
+function drawBear3D(screenX, scale, horizonY) {
     worldCtx.save();
     const x = worldCanvas.width / 2 + screenX;
-    const y = worldCanvas.height / 2 + 80 * scale;
+    const y = horizonY + (80 + playerZ) * scale;
     worldCtx.translate(x, y);
     worldCtx.scale(scale, scale);
 
@@ -360,20 +392,38 @@ function worldLoop() {
     if (movement.s) { localPlayer.x -= Math.cos(playerAngle) * PLAYER_SPEED; localPlayer.y -= Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
     if (movement.a) { playerAngle -= ROTATION_SPEED; moved = true; }
     if (movement.d) { playerAngle += ROTATION_SPEED; moved = true; }
+    
+    // Keyboard Looking
+    if (movement.arrowup) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
+    if (movement.arrowdown) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
 
     // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
     localPlayer.y = Math.max(-10000, Math.min(10000, localPlayer.y));
+
+    // Jump Physics
+    if (playerZ > 0 || zVelocity !== 0) {
+        playerZ += zVelocity;
+        zVelocity -= GRAVITY;
+        if (playerZ <= 0) {
+            playerZ = 0;
+            zVelocity = 0;
+        }
+        moved = true; // Force sync in online mode if jumping
+    }
 
     if (moved && isOnlineMode && socket) {
         socket.send(JSON.stringify({ type: 'POS', x: localPlayer.x, y: localPlayer.y }));
     }
 
     // Clear canvas
+    const horizonShift = Math.tan(verticalAngle) * 400; // Focal constant for vertical look
+    const horizonY = (worldCanvas.height / 2) + horizonShift;
+
     worldCtx.fillStyle = '#87CEEB'; // Sky
-    worldCtx.fillRect(0, 0, worldCanvas.width, worldCanvas.height / 2);
+    worldCtx.fillRect(0, 0, worldCanvas.width, horizonY);
     worldCtx.fillStyle = '#0a2f0a';
-    worldCtx.fillRect(0, worldCanvas.height / 2, worldCanvas.width, worldCanvas.height / 2); // Grass
+    worldCtx.fillRect(0, horizonY, worldCanvas.width, worldCanvas.height - horizonY); // Grass
 
     // Find all objects in vicinity and project them
     let objects = [];
@@ -431,12 +481,12 @@ function worldLoop() {
     // Draw objects
     objects.forEach(obj => {
         const scale = 200 / obj.x;
-        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale);
-        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale);
-        else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale);
+        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY);
+        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY);
+        else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale, horizonY);
         else if (obj.type === 'opponent') {
             worldCtx.save();
-            worldCtx.translate(worldCanvas.width/2 + obj.y * scale, worldCanvas.height/2 + 80 * scale);
+            worldCtx.translate(worldCanvas.width/2 + obj.y * scale, horizonY + (80 + playerZ) * scale);
             worldCtx.scale(scale * 2, scale * 2);
             drawHuman(0, 0, '#ff4444', false);
             worldCtx.restore();

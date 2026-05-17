@@ -36,6 +36,7 @@ function goToWorld() {
     isInWorld = true;
     document.getElementById('main-menu-screen').classList.add('hidden');
     document.getElementById('world-screen').classList.remove('hidden');
+    document.getElementById('jump-btn').classList.remove('hidden');
 }
 
 /**
@@ -48,6 +49,7 @@ function goToMainMenu() {
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('p1-unit-guide').classList.add('hidden');
     document.getElementById('p2-unit-guide').classList.add('hidden'); 
+    document.getElementById('jump-btn').classList.add('hidden');
     document.getElementById('main-menu-screen').classList.remove('hidden');
     updateScoreboard();
 }
