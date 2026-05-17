@@ -47,14 +47,14 @@ wss.on('connection', (ws, req) => {
         broadcastToRoom(roomId, { type: 'room-ready' });
     }
 
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
         // Relay message to the other person in the room
         const roomClients = rooms.get(ws.roomId);
         if (roomClients) {
             roomClients.forEach(client => {
                 // Relay the message ONLY to the opponent (the other person in the room)
                 if (client !== ws && client.readyState === 1) { // 1 = OPEN
-                    client.send(data); 
+                    client.send(data, { binary: isBinary }); 
                 }
             });
         }
