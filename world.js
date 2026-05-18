@@ -35,6 +35,7 @@ let playerAngle = 0; // Player's horizontal orientation
 let playerZ = 0; // Player height (for jumping)
 let zVelocity = 0; // Vertical speed
 let verticalAngle = 0; // Pitch (looking up/down)
+let currentPOV = 1; // 1: First Person, 2: Second Person, 3: Third Person
 let worldAudioCtx = null;
 
 /**
@@ -78,6 +79,10 @@ window.addEventListener('keydown', (e) => {
             }
             lastWPressTime = now;
         }
+
+        if (key === '1') currentPOV = 1;
+        if (key === '2') currentPOV = 2;
+        if (key === '3') currentPOV = 3;
 
         movement[key] = true;
         if (key === ' ') {
@@ -241,13 +246,12 @@ window.addEventListener('touchend', handleWorldInputEnd);
 /**
  * Projects a world coordinate to screen space for 3D effect
  */
-function project(worldX, worldY, playerX, playerY, angle) {
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    const dx = worldX - playerX;
-    const dy = worldY - playerY;
-    const rotX = dx * Math.cos(-angle) - dy * Math.sin(-angle);
-    const rotY = dx * Math.sin(-angle) + dy * Math.cos(-angle);
-    return { x: rotX, y: rotY, dist: rotX }; // x is depth, y is horizontal in First POV
+function project(worldX, worldY, camX, camY, camAngle) {
+    const dx = worldX - camX;
+    const dy = worldY - camY;
+    const rotX = dx * Math.cos(-camAngle) - dy * Math.sin(-camAngle);
+    const rotY = dx * Math.sin(-camAngle) + dy * Math.cos(-camAngle);
+    return { x: rotX, y: rotY, dist: rotX }; // x is depth, y is horizontal
 }
 
 /**
@@ -269,32 +273,57 @@ function toggleInventoryUI() {
 /**
  * Draws a human character with simple animation
  */
-function drawHuman(x, y, color, isMoving) {
+function drawHuman(x, y, color, isMoving, isFacingAway = false, isAlive = true) {
     worldCtx.save();
-    worldCtx.translate(x, y);
+    // Shift so (0,0) is the base of the feet for better grounding
+    worldCtx.translate(x, y - 12); 
+
+    if (!isAlive) {
+        worldCtx.rotate(Math.PI / 2); // Fall over if dead
+        worldCtx.translate(10, 0);
+    }
 
     const bob = isMoving ? Math.sin(Date.now() / 150) * 3 : 0;
     const legSwing = isMoving ? Math.sin(Date.now() / 150) * 6 : 0;
 
     // Legs
     worldCtx.fillStyle = '#222';
-    worldCtx.fillRect(-5, 2 + legSwing, 4, 10);
-    worldCtx.fillRect(1, 2 - legSwing, 4, 10);
+    worldCtx.fillRect(-5, legSwing, 4, 10);
+    worldCtx.fillRect(1, -legSwing, 4, 10);
 
     // Torso
     worldCtx.fillStyle = color;
-    worldCtx.fillRect(-7, -15 + bob, 14, 18);
+    worldCtx.fillRect(-7, -17 + bob, 14, 18);
 
-    // Head
-    worldCtx.fillStyle = '#ffdbac';
+    // Head (Back of head is solid hair color)
+    worldCtx.fillStyle = isFacingAway ? '#4b3621' : '#ffdbac';
     worldCtx.beginPath();
-    worldCtx.arc(0, -22 + bob, 6, 0, Math.PI * 2);
+    worldCtx.arc(0, -24 + bob, 6, 0, Math.PI * 2);
     worldCtx.fill();
+
+    // Extra Hair Detail (Only if facing away)
+    if (isFacingAway) {
+        worldCtx.fillStyle = '#3d2b1f'; // Darker hair shade
+        worldCtx.beginPath();
+        worldCtx.arc(0, -22 + bob, 4, 0, Math.PI); // Nape of neck hair
+        worldCtx.fill();
+    }
+
+    // Face (Only if facing camera)
+    if (!isFacingAway) {
+        worldCtx.fillStyle = '#333';
+        const eyeHeight = -25 + bob;
+        worldCtx.beginPath();
+        worldCtx.arc(-2, eyeHeight, 1, 0, Math.PI * 2);
+        worldCtx.arc(2, eyeHeight, 1, 0, Math.PI * 2);
+        worldCtx.fill();
+    }
 
     // Arms
     worldCtx.fillStyle = color;
-    worldCtx.fillRect(-11, -13 + bob - legSwing/2, 4, 10);
-    worldCtx.fillRect(7, -13 + bob + legSwing/2, 4, 10);
+    const armY = -15 + bob;
+    worldCtx.fillRect(-11, armY - legSwing/2, 4, 10);
+    worldCtx.fillRect(7, armY + legSwing/2, 4, 10);
 
     worldCtx.restore();
 }
@@ -342,11 +371,15 @@ function drawWoodDrop3D(screenX, scale, horizonY) {
 /**
  * Draws a bear in 3D
  */
-function drawBear3D(screenX, scale, horizonY, isAggro = false) {
+function drawBear3D(screenX, scale, horizonY, isAggro = false, lookRotation = 0) {
     worldCtx.save();
     const bearScale = scale * 1.3; // Scaled to match the human character's visual height
     const x = worldCanvas.width / 2 + screenX;
     const groundY = horizonY + (80 + playerZ) * scale;
+
+    const faceShift = Math.sin(lookRotation) * 12;
+    const isFacingAway = Math.abs(lookRotation) > Math.PI / 2;
+
     worldCtx.translate(x, groundY);
     worldCtx.scale(bearScale, bearScale);
 
@@ -369,25 +402,31 @@ function drawBear3D(screenX, scale, horizonY, isAggro = false) {
         worldCtx.fillRect(9 + i*3, legY + 18, 2, 4);
     }
 
-    // Head (Always facing player)
+    // Head
     worldCtx.fillStyle = furColor;
-    worldCtx.beginPath(); worldCtx.arc(0, -45, 18, 0, Math.PI * 2); worldCtx.fill();
+    worldCtx.beginPath(); worldCtx.arc(faceShift * 0.2, -45, 18, 0, Math.PI * 2); worldCtx.fill();
     
-    // Snout
-    worldCtx.fillStyle = shadowColor;
-    worldCtx.beginPath(); worldCtx.ellipse(0, -42, 10, 8, 0, 0, Math.PI * 2); worldCtx.fill();
-    worldCtx.fillStyle = 'black';
-    worldCtx.beginPath(); worldCtx.arc(0, -42, 3, 0, Math.PI * 2); worldCtx.fill();
-
     // Ears
     worldCtx.fillStyle = furColor;
-    worldCtx.beginPath(); worldCtx.arc(-12, -58, 6, 0, Math.PI * 2); worldCtx.arc(12, -58, 6, 0, Math.PI * 2); worldCtx.fill();
+    const earShift = faceShift * 0.5;
+    worldCtx.beginPath(); 
+    worldCtx.arc(-12 + earShift, -58, 6, 0, Math.PI * 2); 
+    worldCtx.arc(12 + earShift, -58, 6, 0, Math.PI * 2); 
+    worldCtx.fill();
 
-    // Eyes (Turn red when aggro)
-    worldCtx.fillStyle = isAggro ? '#ff0000' : 'white';
-    worldCtx.beginPath(); worldCtx.arc(-7, -48, 3, 0, Math.PI * 2); worldCtx.arc(7, -48, 3, 0, Math.PI * 2); worldCtx.fill();
-    worldCtx.fillStyle = 'black';
-    worldCtx.beginPath(); worldCtx.arc(-6.5, -48, 1.5, 0, Math.PI * 2); worldCtx.arc(7.5, -48, 1.5, 0, Math.PI * 2); worldCtx.fill();
+    if (!isFacingAway) {
+        // Snout
+        worldCtx.fillStyle = shadowColor;
+        worldCtx.beginPath(); worldCtx.ellipse(faceShift, -42, 10, 8, 0, 0, Math.PI * 2); worldCtx.fill();
+        worldCtx.fillStyle = 'black';
+        worldCtx.beginPath(); worldCtx.arc(faceShift, -42, 3, 0, Math.PI * 2); worldCtx.fill();
+
+        // Eyes (Turn red when aggro)
+        worldCtx.fillStyle = isAggro ? '#ff0000' : 'white';
+        worldCtx.beginPath(); worldCtx.arc(-7 + faceShift, -48, 3, 0, Math.PI * 2); worldCtx.arc(7 + faceShift, -48, 3, 0, Math.PI * 2); worldCtx.fill();
+        worldCtx.fillStyle = 'black';
+        worldCtx.beginPath(); worldCtx.arc(-6.5 + faceShift, -48, 1.5, 0, Math.PI * 2); worldCtx.arc(7.5 + faceShift, -48, 1.5, 0, Math.PI * 2); worldCtx.fill();
+    }
 
     worldCtx.restore();
 }
@@ -447,60 +486,52 @@ function processBear3D(cx, cy, localPlayer, camX, camY) {
     // Prevent bears from spawning in chunks containing the player spawn points (0,0 and 1,0)
     if (cy === 0 && (cx === 0 || cx === 1)) return null;
 
-    // 12% chance per chunk to have a bear (Less common for realism)
-    if (worldHash(cx + 500, cy + 500) < 0.12 && !killedBears.has(`${cx},${cy}`)) {
+    // 1% chance per chunk to have a bear (Extremely rare frequency)
+    if (worldHash(cx + 500, cy + 500) < 0.01 && !killedBears.has(`${cx},${cy}`)) {
         const bBaseX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
         const bBaseY = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
         
-        if (!bearOffsets[`${cx},${cy}`]) bearOffsets[`${cx},${cy}`] = {x: 0, y: 0, aggro: false};
+        if (!bearOffsets[`${cx},${cy}`]) {
+            // Prevent bears from spawning too close to the human player
+            const spawnDist = Math.hypot(localPlayer.x - bBaseX, localPlayer.y - bBaseY);
+            if (spawnDist < 450) return null;
+            bearOffsets[`${cx},${cy}`] = {x: 0, y: 0, aggro: false};
+        }
         const offset = bearOffsets[`${cx},${cy}`];
         const bX = bBaseX + offset.x;
         const bY = bBaseY + offset.y;
         
         const distToPlayer = Math.hypot(localPlayer.x - bX, localPlayer.y - bY);
-        
-        // Detect if player is looking at bear face
-        const p = project(bX, bY, localPlayer.x, localPlayer.y, playerAngle);
-        if (p.x > 0 && Math.abs(p.y) < 50 && distToPlayer < 500) {
-            if (!offset.aggro) {
-                offset.aggro = true;
-                log("System: The bear noticed you looking!");
-            }
-        }
 
-        if (distToPlayer < 600) { // Detection range
-            let angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
-            const speed = offset.aggro ? 9.5 : 3.2; // Significantly faster: stalks faster than player, charges aggressively
-            
-            let nextX = bX + Math.cos(angle) * speed;
-            let nextY = bY + Math.sin(angle) * speed;
+        // The bear is now always aggressive and ignores detection distance
+        offset.aggro = true;
+        let angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
+        const speed = 9.5; // Aggressive run speed
 
-            // Safe zone check
-            if (Math.hypot(nextX - 100, nextY - 200) > 200 && Math.hypot(nextX - 500, nextY - 200) > 200) {
-                // Smarter Pathfinding: Steering behavior to avoid trees
-                if (isCollidingWithTree(nextX, nextY)) {
-                    let steered = false;
-                    // Try alternative angles (15, 30, 45... up to 90 degrees) to find a clear path
-                    for (let i = 1; i <= 6; i++) {
-                        const steerOffset = i * 15 * (Math.PI / 180);
-                        // Check left then right
-                        if (!isCollidingWithTree(bX + Math.cos(angle - steerOffset) * speed, bY + Math.sin(angle - steerOffset) * speed)) {
-                            angle -= steerOffset; steered = true; break;
-                        }
-                        if (!isCollidingWithTree(bX + Math.cos(angle + steerOffset) * speed, bY + Math.sin(angle + steerOffset) * speed)) {
-                            angle += steerOffset; steered = true; break;
-                        }
+        let nextX = bX + Math.cos(angle) * speed;
+        let nextY = bY + Math.sin(angle) * speed;
+
+        // Safe zone check (keep bears away from spawn points)
+        if (Math.hypot(nextX - 100, nextY - 200) > 200 && Math.hypot(nextX - 500, nextY - 200) > 200) {
+            // Smarter Pathfinding: Steering behavior to avoid trees
+            if (isCollidingWithTree(nextX, nextY)) {
+                let steered = false;
+                for (let i = 1; i <= 6; i++) {
+                    const steerOffset = i * 15 * (Math.PI / 180);
+                    if (!isCollidingWithTree(bX + Math.cos(angle - steerOffset) * speed, bY + Math.sin(angle - steerOffset) * speed)) {
+                        angle -= steerOffset; steered = true; break;
                     }
-                    if (steered) {
-                        offset.x += Math.cos(angle) * speed;
-                        offset.y += Math.sin(angle) * speed;
+                    if (!isCollidingWithTree(bX + Math.cos(angle + steerOffset) * speed, bY + Math.sin(angle + steerOffset) * speed)) {
+                        angle += steerOffset; steered = true; break;
                     }
-                } else {
+                }
+                if (steered) {
                     offset.x += Math.cos(angle) * speed;
                     offset.y += Math.sin(angle) * speed;
                 }
             } else {
-                offset.aggro = false;
+                offset.x += Math.cos(angle) * speed;
+                offset.y += Math.sin(angle) * speed;
             }
         }
         
@@ -535,8 +566,26 @@ function worldLoop() {
 
     if (protectiveCircleTimer > 0) protectiveCircleTimer--;
 
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    const opponentPlayer = myRole === 'p1' ? p2 : p1;
+    // Default to P1 for local play, otherwise use the assigned role
+    const localPlayer = (isOnlineMode && myRole === 'p2') ? p2 : p1;
+    const opponentPlayer = (isOnlineMode && myRole === 'p2') ? p1 : p2;
+
+    // Determine Camera Position and Angle based on POV
+    let camX = localPlayer.x;
+    let camY = localPlayer.y;
+    let camAngle = playerAngle;
+
+    if (currentPOV === 2) {
+        // Second Person: Front-facing cinematic view looking at the player
+        camX = localPlayer.x + Math.cos(playerAngle) * 150;
+        camY = localPlayer.y + Math.sin(playerAngle) * 150;
+        camAngle = playerAngle + Math.PI;
+    } else if (currentPOV === 3) {
+        // Third Person: Follow camera behind the player
+        camX = localPlayer.x - Math.cos(playerAngle) * 100;
+        camY = localPlayer.y - Math.sin(playerAngle) * 100;
+        camAngle = playerAngle;
+    }
 
     let nextX = localPlayer.x;
     let nextY = localPlayer.y;
@@ -593,11 +642,18 @@ function worldLoop() {
 
     // Find all objects in vicinity and project them
     let objects = [];
-    const viewRadius = 600;
+    const viewRadius = 2000; // Increased to allow seeing bears from a long distance
+    const treeViewRadius = 800; // Keep tree rendering range limited for performance
     const viewLeft = Math.floor((localPlayer.x - viewRadius) / CHUNK_SIZE);
     const viewRight = Math.ceil((localPlayer.x + viewRadius) / CHUNK_SIZE);
     const viewTop = Math.floor((localPlayer.y - viewRadius) / CHUNK_SIZE);
     const viewBottom = Math.ceil((localPlayer.y + viewRadius) / CHUNK_SIZE);
+
+    // Bounds for tree processing to maintain high FPS
+    const tLeft = Math.floor((localPlayer.x - treeViewRadius) / CHUNK_SIZE);
+    const tRight = Math.ceil((localPlayer.x + treeViewRadius) / CHUNK_SIZE);
+    const tTop = Math.floor((localPlayer.y - treeViewRadius) / CHUNK_SIZE);
+    const tBottom = Math.ceil((localPlayer.y + treeViewRadius) / CHUNK_SIZE);
 
     let nearestTree = null;
     let minTreeDist = Infinity;
@@ -605,16 +661,21 @@ function worldLoop() {
     // Gather trees and bears
     for (let cx = viewLeft; cx <= viewRight; cx++) {
         for (let cy = viewTop; cy <= viewBottom; cy++) {
-            for (let x = 0; x < CHUNK_SIZE; x += CELL_SIZE) {
-                for (let y = 0; y < CHUNK_SIZE; y += CELL_SIZE) {
-                    const wx = cx * CHUNK_SIZE + x;
-                    const wy = cy * CHUNK_SIZE + y;
-                    if (worldHash(wx, wy) < TREE_DENSITY && !destroyedTrees.has(`${wx},${wy}`)) {
-                        const p = project(wx, wy, localPlayer.x, localPlayer.y, playerAngle);
-                        if (p.x > 5) {
-                            objects.push({ type: 'tree', ...p, wx, wy });
-                            if (p.x < minTreeDist && Math.abs(p.y) < 15) { // Narrowed to trunk width for crosshair precision
-                                minTreeDist = p.x;
+            // Only process tree cells if the chunk is within the treeViewRadius
+            if (cx >= tLeft && cx <= tRight && cy >= tTop && cy <= tBottom) {
+                for (let x = 0; x < CHUNK_SIZE; x += CELL_SIZE) {
+                    for (let y = 0; y < CHUNK_SIZE; y += CELL_SIZE) {
+                        const wx = cx * CHUNK_SIZE + x;
+                        const wy = cy * CHUNK_SIZE + y;
+                        if (worldHash(wx, wy) < TREE_DENSITY && !destroyedTrees.has(`${wx},${wy}`)) {
+                            // Visual projection
+                            const pVis = project(wx, wy, camX, camY, camAngle);
+                            if (pVis.x > 5) objects.push({ type: 'tree', ...pVis, wx, wy });
+
+                            // Interaction logic (Harvesting)
+                            const pInt = project(wx, wy, localPlayer.x, localPlayer.y, playerAngle);
+                            if (pInt.x > 5 && pInt.x < minTreeDist && Math.abs(pInt.y) < 15) {
+                                minTreeDist = pInt.x;
                                 nearestTree = { wx, wy };
                             }
                         }
@@ -623,22 +684,37 @@ function worldLoop() {
             }
             const bear = processBear3D(cx, cy, localPlayer, 0, 0);
             if (bear) {
-                const p = project(bear.x, bear.y, localPlayer.x, localPlayer.y, playerAngle);
-                if (p.x > 5) objects.push({ type: 'bear', ...p });
+                const p = project(bear.x, bear.y, camX, camY, camAngle);
+                if (p.x > 5) {
+                    // Calculate the angle from bear to player vs bear to camera
+                    const angleToPlayer = Math.atan2(localPlayer.y - bear.y, localPlayer.x - bear.x);
+                    const angleToCam = Math.atan2(camY - bear.y, camX - bear.x);
+                    let lookRotation = angleToPlayer - angleToCam;
+                    // Normalize to [-PI, PI]
+                    lookRotation = ((lookRotation + Math.PI) % (Math.PI * 2)) - Math.PI;
+                    
+                    objects.push({ type: 'bear', ...p, aggro: bear.aggro, lookRotation });
+                }
             }
         }
     }
 
     // Gather wood drops
     woodDrops.forEach((drop, index) => {
-        const p = project(drop.x, drop.y, localPlayer.x, localPlayer.y, playerAngle);
+        const p = project(drop.x, drop.y, camX, camY, camAngle);
         if (p.x > 5) objects.push({ type: 'drop', ...p, index });
     });
 
     // Add Opponent
     if (isOnlineMode) {
-        const p = project(opponentPlayer.x, opponentPlayer.y, localPlayer.x, localPlayer.y, playerAngle);
+        const p = project(opponentPlayer.x, opponentPlayer.y, camX, camY, camAngle);
         if (p.x > 5) objects.push({ type: 'opponent', ...p });
+    }
+
+    // Add Local Player if in 2nd or 3rd person
+    if (currentPOV !== 1) {
+        const p = project(localPlayer.x, localPlayer.y, camX, camY, camAngle);
+        if (p.x > 1) objects.push({ type: 'local_player', ...p, isMoving: moved, alive: localPlayer.alive, z: playerZ });
     }
 
     // Add Protective Circle segments (Circling wooden logs)
@@ -650,7 +726,7 @@ function worldLoop() {
             const angle = (i / numSegments) * Math.PI * 2 + rotationOffset;
             const sx = localPlayer.x + Math.cos(angle) * shieldRadius;
             const sy = localPlayer.y + Math.sin(angle) * shieldRadius;
-            const p = project(sx, sy, localPlayer.x, localPlayer.y, playerAngle);
+            const p = project(sx, sy, camX, camY, camAngle);
             if (p.x > 2) objects.push({ type: 'shield_segment', ...p });
         }
     }
@@ -662,7 +738,7 @@ function worldLoop() {
     objects.forEach(obj => {
         const scale = 200 / obj.x;
         if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY, obj.wx, obj.wy);
-        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY, obj.aggro);
+        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY, obj.aggro, obj.lookRotation);
         else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale, horizonY);
         else if (obj.type === 'shield_segment') {
             const x = worldCanvas.width / 2 + obj.y * scale;
@@ -683,6 +759,17 @@ function worldLoop() {
             worldCtx.strokeStyle = 'rgba(0,0,0,0.5)';
             worldCtx.lineWidth = 0.5 * scale;
             worldCtx.strokeRect(x - 0.5 * scale, y - 5 * scale, 1 * scale, 10 * scale);
+        }
+        else if (obj.type === 'local_player') {
+            worldCtx.save();
+            const x = worldCanvas.width / 2 + obj.y * scale;
+            // Ensure the local player position accounts for jumping (obj.z)
+            const y = horizonY + (80 + obj.z) * scale; 
+            worldCtx.translate(x, y);
+            // Reduced scale for a more natural appearance in 2nd and 3rd POV
+            worldCtx.scale(scale * 2.5, scale * 2.5); 
+            drawHuman(0, 0, '#4444ff', obj.isMoving, currentPOV === 3, obj.alive); 
+            worldCtx.restore();
         }
         else if (obj.type === 'opponent') {
             worldCtx.save();

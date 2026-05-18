@@ -456,6 +456,11 @@ index.html:
             text-align: center;
         }
 
+        /* Mirror Mode Styles */
+        .flipped {
+            transform: rotate(180deg);
+        }
+
         .player-box {
             border: 2px solid #444;
             padding: 20px;
@@ -540,31 +545,32 @@ index.html:
     <div id="game-screen" class="hidden">
         <div id="timer-display"></div>
         
-        <div id="main-arena">
-            <div id="game-container">
-                <div class="player-box" id="p1-box">
-                    <h2 id="p1-display-name">Player 1</h2>
-                    <div style="color: #ffcc00; font-weight: bold;">Score: <span id="p1-score">0</span></div>
-                    <div class="energy-count" id="p1-energy">0</div>
-                    <div class="status" id="p1-status">Waiting...</div>
+        <!-- Container that will hold one or two views -->
+        <div id="arena-host">
+            <div class="arena-view" id="p1-view">
+                <div class="arena-layout">
+                    <div id="game-container">
+                        <div class="player-box">
+                            <h2 class="p1-name-label">Player 1</h2>
+                            <div style="color: #ffcc00; font-weight: bold;">Score: <span class="p1-score-val">0</span></div>
+                            <div class="energy-count p1-energy-val">0</div>
+                            <div class="status p1-status-val">Waiting...</div>
+                        </div>
+                        <div class="player-box">
+                            <h2 class="p2-name-label">Player 2</h2>
+                            <div class="energy-count p2-energy-val">0</div>
+                            <div class="status p2-status-val">Waiting...</div>
+                        </div>
+                    </div>
+                    <div id="log-container">
+                        <div class="log-header">Battle Record</div>
+                        <div class="battle-log-box">Welcome! Choose your units to begin.</div>
+                    </div>
                 </div>
-                
-                <div class="player-box" id="p2-box">
-                    <h2>Player 2</h2>
-                    <div class="energy-count" id="p2-energy">0</div>
-                    <div class="status" id="p2-status">Waiting...</div>
-                </div>
-            </div>
-
-            <div id="log-container">
-                <div class="log-header">Battle Record</div>
-                <div id="battle-log">Welcome! Choose your units to begin.</div>
             </div>
         </div>
 
-        <div class="controls" id="controls-text">
-            Player 1 Keys: 1-9 | Press Enter to Restart
-        </div>
+        <div class="controls" id="controls-text">...</div>
         <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
     </div>
 

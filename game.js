@@ -235,6 +235,20 @@ function initGame(vsAI) {
     } else {
         p2Guide.classList.add('hidden');
     }
+
+    // Mirror the Arena for Local PvP
+    const arenaHost = document.getElementById('arena-host');
+    const p1View = document.getElementById('p1-view');
+    // Remove existing mirror if any
+    const existingMirror = document.getElementById('p2-mirror-view');
+    if (existingMirror) existingMirror.remove();
+
+    if (!vsAI && !isOnlineMode) {
+        const mirror = p1View.cloneNode(true);
+        mirror.id = "p2-mirror-view";
+        mirror.classList.add('flipped');
+        arenaHost.insertBefore(mirror, p1View);
+    }
     
     const controls = document.getElementById('controls-text');
     if (isOnlineMode) {
@@ -263,7 +277,7 @@ function resetGame() {
     roundCount = 1;
     clearTimeout(turnTimer);
     clearTimeout(aiThinkingTimeout);
-    document.getElementById('battle-log').innerHTML = "Welcome! Choose your units to begin.";
+    log("Welcome! Choose your units to begin.", true); // Use true to clear
     document.getElementById('timer-display').innerText = "";
     updateUI();
     startRound();
@@ -277,10 +291,7 @@ function startRound() {
     
     log(`System: Round ${roundCount} Started!`);
 
-    document.getElementById('p1-status').innerText = "Waiting...";
-    document.getElementById('p2-status').innerText = isAIMode ? "AI Thinking..." : "Waiting...";
-    document.getElementById('p1-status').style.color = "#888";
-    document.getElementById('p2-status').style.color = "#888";
+    updateStatuses("Waiting...", isAIMode ? "AI Thinking..." : "Waiting...", "#888");
 
     if (!isAIMode) return;
 
@@ -354,8 +365,7 @@ function selectMove(playerStr, unitId, isRemote = false) {
     player.choice = unitId;
     // Only update status if not in world mode (world mode has its own status display)
     if (!isInWorld) {
-        document.getElementById(`${playerStr}-status`).innerText = "LOCKED IN";
-        document.getElementById(`${playerStr}-status`).style.color = "#00ff00";
+        updateStatus(playerStr, "LOCKED IN", "#00ff00");
     }
 
     // Broadcast move to peer
@@ -465,36 +475,24 @@ function resolveRound() {
     updateStreak(p1, m1, m2, "Player 1");
     updateStreak(p2, m2, m1, "Player 2");
     // ---------------------------
-
-    const p1Status = document.getElementById('p1-status');
-    const p2Status = document.getElementById('p2-status');
-
+    
     if (p1KillsP2 && p2KillsP1) {
-        // Mutual destruction? In this game usually means both die
         p1.alive = false; p2.alive = false;
         log("Double Knockout!");
-        p1Status.innerText = `${UNITS[m1].name.toUpperCase()}: CLASH`;
-        p2Status.innerText = `${UNITS[m2].name.toUpperCase()}: CLASH`;
-        p1Status.style.color = p2Status.style.color = "#ff4444";
+        updateStatuses(`${UNITS[m1].name.toUpperCase()}: CLASH`, `${UNITS[m2].name.toUpperCase()}: CLASH`, "#ff4444");
     } else if (p1KillsP2) {
         p2.alive = false;
         log("Player 1 Wins the Round!");
-        p1Status.innerText = `${UNITS[m1].name.toUpperCase()}: WIN!`;
-        p2Status.innerText = `${UNITS[m2].name.toUpperCase()}: DEAD`;
-        p1Status.style.color = "#00ffcc";
-        p2Status.style.color = "#ff4444";
+        updateStatus('p1', `${UNITS[m1].name.toUpperCase()}: WIN!`, "#00ffcc");
+        updateStatus('p2', `${UNITS[m2].name.toUpperCase()}: DEAD`, "#ff4444");
     } else if (p2KillsP1) {
         p1.alive = false;
         log("Player 2 Wins the Round!");
-        p1Status.innerText = `${UNITS[m1].name.toUpperCase()}: DEAD`;
-        p2Status.innerText = `${UNITS[m2].name.toUpperCase()}: WIN!`;
-        p1Status.style.color = "#ff4444";
-        p2Status.style.color = "#00ffcc";
+        updateStatus('p1', `${UNITS[m1].name.toUpperCase()}: DEAD`, "#ff4444");
+        updateStatus('p2', `${UNITS[m2].name.toUpperCase()}: WIN!`, "#00ffcc");
     } else {
         log("Stalemate! Both survive.");
-        p1Status.innerText = `${UNITS[m1].name.toUpperCase()}: SAFE`;
-        p2Status.innerText = `${UNITS[m2].name.toUpperCase()}: SAFE`;
-        p1Status.style.color = p2Status.style.color = "#fff";
+        updateStatuses(`${UNITS[m1].name.toUpperCase()}: SAFE`, `${UNITS[m2].name.toUpperCase()}: SAFE`, "#fff");
     }
 
     // Reset choices for next round
@@ -532,30 +530,40 @@ function checkKill(attacker, defender) {
     return false;
 }
 
+/**
+ * Updates all mirrored UI elements simultaneously
+ */
 function updateUI() {
-    // Refresh Dashboard Buttons (Affordability)
     const players = { p1, p2 };
+    
+    // Update all occurrences of labels (Normal and Mirrored)
+    const syncText = (cls, txt) => document.querySelectorAll(cls).forEach(el => el.innerText = txt);
+
+    syncText('.p1-name-label', (isOnlineMode && myRole === 'p2') ? "Opponent" : (currentUser || "Player 1"));
+    syncText('.p2-name-label', (isOnlineMode && myRole === 'p1') ? "Opponent" : (isAIMode ? "AI Bot" : "Player 2"));
+    
+    syncText('.p1-energy-val', p1.energy);
+    syncText('.p2-energy-val', p2.energy);
+    syncText('.p1-score-val', p1Score);
+
     ['p1', 'p2'].forEach(pKey => {
         for (let id = 1; id <= 9; id++) {
             const btn = document.getElementById(`${pKey}-unit-btn-${id}`);
             if (btn) {
-                if (UNITS[id].cost > players[pKey].energy) btn.classList.add('disabled');
-                else btn.classList.remove('disabled');
+                btn.classList.toggle('disabled', UNITS[id].cost > players[pKey].energy);
             }
         }
     });
 
-    // Update game-screen UI elements
-    const p1EnergyEl = document.getElementById('p1-energy');
-    if (p1EnergyEl) p1EnergyEl.innerText = p1.energy;
-    const p2EnergyEl = document.getElementById('p2-energy');
-    if (p2EnergyEl) p2EnergyEl.innerText = p2.energy;
-    const scoreEl = document.getElementById('p1-score');
-    if (scoreEl) scoreEl.innerText = p1Score;
-
     // Update world-screen UI elements
-    const worldP1EnergyEl = document.getElementById('world-p1-energy');
-    if (worldP1EnergyEl) worldP1EnergyEl.innerText = p1.energy;
+    if (document.getElementById('world-p1-energy')) {
+        document.getElementById('world-p1-energy').innerText = p1.energy;
+    }
+    // ... other world updates
+}
+
+function updateUI() { // Rest of the function for World Mode
+    // [Existing world-screen code remains the same]
     const worldP1InventoryWoodEl = document.getElementById('world-p1-inventory-wood');
     if (worldP1InventoryWoodEl) worldP1InventoryWoodEl.innerText = p1.inventory.wood;
 
@@ -571,12 +579,28 @@ function updateUI() {
     }
 }
 
-function log(msg) {
-    const logEl = document.getElementById('battle-log');
-    // Appending ensures the newest result is at the bottom
-    logEl.innerHTML += `<div style="border-bottom: 1px solid #333; padding: 2px 0;">${msg}</div>`;
-    // Force scroll to bottom so the latest result is always visible
-    logEl.scrollTop = logEl.scrollHeight;
+/**
+ * Logs messages to all active battle log boxes (Normal and Mirrored)
+ */
+function log(msg, clear = false) {
+    const logs = document.querySelectorAll('.battle-log-box');
+    logs.forEach(el => {
+        if (clear) el.innerHTML = "";
+        el.innerHTML += `<div style="border-bottom: 1px solid #333; padding: 2px 0;">${msg}</div>`;
+        el.scrollTop = el.scrollHeight;
+    });
+}
+
+function updateStatus(player, text, color) {
+    document.querySelectorAll(`.${player}-status-val`).forEach(el => {
+        el.innerText = text;
+        el.style.color = color;
+    });
+}
+
+function updateStatuses(p1Text, p2Text, color) {
+    updateStatus('p1', p1Text, color);
+    updateStatus('p2', p2Text, color);
 }
 
 function endGame() {
@@ -600,8 +624,8 @@ function endGame() {
     announce("GGs!");
 
     updateUI();
-    document.getElementById('p1-status').innerText = p1.alive ? "WINNER" : "DEAD";
-    document.getElementById('p2-status').innerText = p2.alive ? "WINNER" : "DEAD";
+    updateStatus('p1', p1.alive ? "WINNER" : "DEAD", p1.alive ? "#00ffcc" : "#ff4444");
+    updateStatus('p2', p2.alive ? "WINNER" : "DEAD", p2.alive ? "#00ffcc" : "#ff4444");
 }
 
 updateUI();
