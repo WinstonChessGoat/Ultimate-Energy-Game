@@ -354,78 +354,83 @@
     </div>
 
     <div id="game-screen" class="hidden">
-        <!-- Player 2 Controls (Top, Rotated) -->
-        <div id="p2-unit-guide" class="hidden">
-            <!-- Buttons generated via script or duplicated below -->
-        </div>
+        <div id="game-screen-content">
+            <!-- This div will be dynamically populated for mobile PvP -->
+            <div id="mobile-p2-ui-container" class="hidden"></div>
 
-        <div id="timer-display"></div>
-        
-        <div id="main-arena">
-            <div id="game-container">
-                <div class="player-box" id="p1-box">
-                    <h2 id="p1-display-name">Player 1</h2>
-                    <div style="color: #ffcc00; font-weight: bold;">Score: <span id="p1-score">0</span></div>
-                    <div class="energy-count" id="p1-energy">0</div>
-                    <div class="status" id="p1-status">Waiting...</div>
+            <!-- Player 2 Controls (Top, Rotated) - Used for Desktop PvP -->
+            <div id="p2-unit-guide" class="unit-guide-container hidden">
+                <!-- Buttons generated via script -->
+            </div>
+
+            <div id="timer-display"></div>
+            
+            <div id="main-arena">
+                <div id="game-container">
+                    <div class="player-box" id="p1-box">
+                        <h2 id="p1-display-name">Player 1</h2>
+                        <div style="color: #ffcc00; font-weight: bold;" id="p1-score-container">Score: <span id="p1-score">0</span></div>
+                        <div class="energy-count" id="p1-energy">0</div>
+                        <div class="status" id="p1-status">Waiting...</div>
+                    </div>
+                    
+                    <div class="player-box" id="p2-box">
+                        <h2 id="p2-display-name">Player 2</h2>
+                        <div class="energy-count" id="p2-energy">0</div>
+                        <div class="status" id="p2-status">Waiting...</div>
+                    </div>
                 </div>
                 
-                <div class="player-box" id="p2-box">
-                    <h2 id="p2-display-name">Player 2</h2>
-                    <div class="energy-count" id="p2-energy">0</div>
-                    <div class="status" id="p2-status">Waiting...</div>
+                <div id="log-container">
+                    <div class="log-header">Battle Record</div>
+                    <div id="battle-log" class="battle-log-box">Welcome! Choose your units to begin.</div>
                 </div>
             </div>
 
-            <div id="log-container">
-                <div class="log-header">Battle Record</div>
-                <div id="battle-log">Welcome! Choose your units to begin.</div>
+            <div class="controls" id="controls-text">
+                Player 1 Keys: 1-9 | Press Enter to Restart
             </div>
+            <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
         </div>
-
-        <div class="controls" id="controls-text">
-            Player 1 Keys: 1-9 | Press Enter to Restart
-        </div>
-        <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
     </div>
 
     <!-- Player 1 Controls (Bottom) -->
     <div id="p1-unit-guide" class="hidden">
         <div class="unit-card" id="p1-unit-btn-1" onclick="handleUnitClick('p1', 1)">
             <span>1. Charge</span>
-            <small>Cost: 0 | P1: [1] | P2: [Q]</small>
+            <small>Cost: 0 | P1: [Q] | P2: [1]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-2" onclick="handleUnitClick('p1', 2)">
             <span>2. Fireball</span>
-            <small>Cost: 1 | P1: [2] | P2: [W]</small>
+            <small>Cost: 1 | P1: [W] | P2: [2]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-3" onclick="handleUnitClick('p1', 3)">
             <span>3. Tornado</span>
-            <small>Cost: 2 | P1: [3] | P2: [E]</small>
+            <small>Cost: 2 | P1: [E] | P2: [3]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-4" onclick="handleUnitClick('p1', 4)">
             <span>4. Earthquake</span>
-            <small>Cost: 3 | P1: [4] | P2: [R]</small>
+            <small>Cost: 3 | P1: [R] | P2: [4]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-5" onclick="handleUnitClick('p1', 5)">
             <span>5. Tsunami</span>
-            <small>Cost: 4 | P1: [5] | P2: [T]</small>
+            <small>Cost: 4 | P1: [T] | P2: [5]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-6" onclick="handleUnitClick('p1', 6)">
             <span>6. Blackhole</span>
-            <small>Cost: 5 | P1: [6] | P2: [Y]</small>
+            <small>Cost: 5 | P1: [Y] | P2: [6]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-7" onclick="handleUnitClick('p1', 7)">
             <span>7. Megashield</span>
-            <small>Cost: 10 | P1: [7] | P2: [U]</small>
+            <small>Cost: 10 | P1: [U] | P2: [7]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-8" onclick="handleUnitClick('p1', 8)">
             <span>8. Ultimate</span>
-            <small>Cost: 12 | P1: [8] | P2: [I]</small>
+            <small>Cost: 12 | P1: [I] | P2: [8]</small>
         </div>
         <div class="unit-card" id="p1-unit-btn-9" onclick="handleUnitClick('p1', 9)">
             <span>9. Guard</span>
-            <small>Cost: 0 | P1: [9] | P2: [O]</small>
+            <small>Cost: 0 | P1: [O] | P2: [9]</small>
         </div>
         <div class="unit-card" style="border-color: #ff4444;" onclick="requestRestart()">
             <span>Restart</span>
@@ -433,6 +438,93 @@
         </div>
     </div>
 
+    <style>
+        /* Mobile PvP Layout */
+        .mobile-pvp-layout {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100vh; /* Take full viewport height */
+            width: 100vw; /* Take full viewport width */
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .mobile-pvp-layout #game-screen-content {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            justify-content: space-between;
+        }
+        .mobile-pvp-layout #mobile-p2-ui-container {
+            order: 1; /* P2's arena part */
+            transform: rotate(180deg);
+            display: flex; /* To arrange box and unit guide */
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 10px; /* Space between P2 and central elements */
+        }
+        .mobile-pvp-layout #mobile-p2-ui-container .player-box,
+        .mobile-pvp-layout #mobile-p2-ui-container .unit-guide-container {
+            margin-top: 10px; /* Space between box and unit guide */
+        }
+
+        .mobile-pvp-layout #main-arena {
+            order: 2; /* Central elements */
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 10px 0;
+        }
+        .mobile-pvp-layout #game-container {
+            flex-direction: column; /* Stack P1 and P2 boxes if they were both in main-arena */
+            gap: 10px;
+        }
+        .mobile-pvp-layout #log-container {
+            flex-grow: 1;
+            width: 100%;
+            max-width: 400px; /* Limit log width */
+        }
+        .mobile-pvp-layout #timer-display {
+            margin-bottom: 10px;
+        }
+
+        .mobile-pvp-layout #p1-unit-guide {
+            order: 3; /* P1's arena part */
+            padding-top: 10px; /* Space between P1 and central elements */
+        }
+        .mobile-pvp-layout #controls-text {
+            order: 4;
+            margin-top: 10px;
+        }
+        .mobile-pvp-layout .menu-btn[onclick="goToMenu()"] {
+            order: 5;
+            margin-top: 10px;
+        }
+
+        /* Ensure unit cards and player boxes are centered within their containers */
+        .mobile-pvp-layout .unit-guide-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .mobile-pvp-layout .player-box {
+            width: auto; /* Allow player box to shrink/grow */
+            max-width: 250px;
+        }
+
+        /* Hide desktop P2 elements in mobile PvP */
+        #game-screen.mobile-pvp-layout #p2-box { display: none; }
+        #game-screen.mobile-pvp-layout #p2-unit-guide { display: none; }
+        #game-screen.mobile-pvp-layout #mobile-p2-ui-container { display: flex; } /* Show the mobile P2 container */
+
+        /* Ensure desktop P2 elements are visible in non-mobile PvP */
+        #game-screen:not(.mobile-pvp-layout) #p2-box { display: block; }
+        #game-screen:not(.mobile-pvp-layout) #p2-unit-guide { display: grid; } /* Or whatever its default display is */
+        #game-screen:not(.mobile-pvp-layout) #mobile-p2-ui-container { display: none; }
+    </style>
     <script src="game.js"></script>
     <script src="hub.js"></script>
     <script src="world.js"></script>

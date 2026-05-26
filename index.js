@@ -6,11 +6,20 @@ const express = require('express');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server }); // The "Brain" that listens for new WebSocket connections
 const port = process.env.PORT || 9000;
+
+// Initialize Database
+const db = new sqlite3.Database('./scores.db');
+db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS scores (username TEXT PRIMARY KEY, score INTEGER)");
+});
+
+app.use(express.json());
 
 // Manage rooms: RoomID -> Set of sockets
 const rooms = new Map();
@@ -100,6 +109,37 @@ function broadcastToRoom(roomId, payload) {
         });
     }
 }
+
+// Database API Routes
+app.get('/api/score/:username', (req, res) => {
+    const username = req.params.username;
+    db.get("SELECT score FROM scores WHERE username = ?", [username], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ score: row ? row.score : 0 });
+    });
+});
+
+app.get('/api/leaderboard', (req, res) => {
+    db.all("SELECT username, score FROM scores ORDER BY score DESC LIMIT 5", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/score', (req, res) => {
+    const { username, score } = req.body;
+    if (!username) return res.status(400).json({ error: "Username required" });
+    
+    const sql = `INSERT INTO scores (username, score) 
+                 VALUES (?, ?) 
+                 ON CONFLICT(username) 
+                 DO UPDATE SET score = excluded.score`;
+                 
+    db.run(sql, [username, score], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
 
 server.listen(port, () => {
     console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${port}`);

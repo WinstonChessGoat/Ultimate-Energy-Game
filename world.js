@@ -807,7 +807,7 @@ function worldLoop() {
     }
 
     // Wood collection (Distance check in 2D space)
-    woodDrops = woodDrops.filter(drop => {
+    woodDrops = woodDrops.filter((drop) => {
         const d = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
         if (d < 60) {
             localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + 1);

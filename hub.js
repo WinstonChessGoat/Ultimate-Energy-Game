@@ -2,23 +2,38 @@
  * Main Hub, Authentication, and UI Navigation Logic
  */
 
-function handleSignIn() {
+async function handleSignIn() {
     const input = document.getElementById('username-input');
     const name = input.value.trim();
     if (!name) return;
 
     currentUser = name;
-    // Save session for persistent login across refreshes
     localStorage.setItem('ultimate_energy_current_session', currentUser);
 
-    const savedData = localStorage.getItem(`ultimate_energy_score_${currentUser}`);
-    p1Score = savedData ? parseInt(savedData) : 0;
+    try {
+        const response = await fetch(`/api/score/${currentUser}`);
+        const data = await response.json();
+        p1Score = data.score || 0;
+    } catch (err) {
+        console.error("Failed to fetch score from DB, falling back to local:", err);
+        const savedData = localStorage.getItem(`ultimate_energy_score_${currentUser}`);
+        p1Score = savedData ? parseInt(savedData) : 0;
+    }
 
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('main-menu-screen').classList.remove('hidden');
     document.getElementById('p1-display-name').innerText = currentUser;
     updateScoreboard();
     updateUI();
+}
+
+function saveScoreToServer(username, score) {
+    localStorage.setItem(`ultimate_energy_score_${username}`, score); // Local fallback
+    fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, score })
+    }).catch(err => console.error("Database save failed:", err));
 }
 
 /**
@@ -57,22 +72,13 @@ function goToMainMenu() {
 /**
  * Scans localStorage for saved scores and renders the Leaderboard.
  */
-function updateScoreboard() {
+async function updateScoreboard() {
     const list = document.getElementById('scoreboard-list');
     if (!list) return;
     list.innerHTML = "";
 
-    const scores = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key.startsWith('ultimate_energy_score_')) {
-            const username = key.replace('ultimate_energy_score_', '');
-            const score = parseInt(localStorage.getItem(key)) || 0;
-            scores.push({ username, score });
-        }
-    }
-
-    scores.sort((a, b) => b.score - a.score);
+    const response = await fetch('/api/leaderboard');
+    const scores = await response.json();
 
     scores.slice(0, 5).forEach((entry, index) => {
         const div = document.createElement('div');
@@ -99,7 +105,7 @@ function tradeWoodForScore() {
     if (p.inventory.wood >= 20) {
         p.inventory.wood -= 20;
         p1Score += 5;
-        if (currentUser) localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
+        if (currentUser) saveScoreToServer(currentUser, p1Score);
         log("System: Traded 20 Wood for 5 Score Points!");
         syncInventory();
     }
@@ -134,7 +140,7 @@ function syncInventory() {
     updateUI();
     if (isOnlineMode && socket) {
         socket.send(JSON.stringify({ 
-            type: 'INVENTORY_UPDATE', 
+            type: 'INVENTORY_UPDATE',
             inventoryWood: p.inventory.wood,
             inventoryAxe: p.inventory.axe
         }));

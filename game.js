@@ -50,6 +50,11 @@ window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld) return; // World handles its own keydowns for movement and cutting
 
+    // If mobile PvP, keyboard input for unit selection is not expected
+    if (isMobile() && !isAIMode && !isOnlineMode) {
+        return;
+    }
+
     if (!p1.alive || !p2.alive) {
         if (key === 'enter') {
             requestRestart();
@@ -158,9 +163,11 @@ function setupSocket(roomId) {
 
 function handleCombatKeys(key) {
     if (isOnlineMode) {
-        // In online mode, both players use 1-9 for their own character
-        if (P2_KEYS[key] && (myRole === 'p1' ? p1 : p2).choice === null) {
-            selectMove(myRole, P2_KEYS[key]);
+        // Respect role-based keys in online mode: P1 uses Q-O, P2 uses 1-9
+        const myKeys = myRole === 'p1' ? P1_KEYS : P2_KEYS;
+        const myChar = myRole === 'p1' ? p1 : p2;
+        if (myKeys[key] && myChar.choice === null) {
+            selectMove(myRole, myKeys[key]);
         }
         return;
     }
@@ -182,7 +189,7 @@ function handleUnitClick(playerStr, unitId) {
 
     if (isOnlineMode) {
         if ((myRole === 'p1' ? p1 : p2).choice === null) selectMove(myRole, unitId);
-    } else {
+    } else { // Local game mode (VS AI or VS Player 2)
         if (playerStr === 'p1' && p1.choice === null) selectMove('p1', unitId);
         else if (playerStr === 'p2' && !isAIMode && p2.choice === null) selectMove('p2', unitId);
     }
@@ -205,13 +212,32 @@ window.updateUI = updateUI;
 
 function initGame(vsAI) {
     isAIMode = vsAI;
+    const gameScreen = document.getElementById('game-screen');
+    const mobileContainer = document.getElementById('mobile-p2-ui-container');
+    
+    // Reset UI states
+    gameScreen.classList.remove('mobile-pvp-layout');
+    mobileContainer.classList.add('hidden');
+    mobileContainer.innerHTML = '';
+
     document.getElementById('menu-screen').classList.add('hidden');
-    document.getElementById('game-screen').classList.remove('hidden');
+    gameScreen.classList.remove('hidden');
     document.getElementById('p1-unit-guide').classList.remove('hidden');
     
-    // Update display names to match roles
     const p1Name = document.getElementById('p1-display-name');
     const p2Name = document.getElementById('p2-display-name');
+    const p2Guide = document.getElementById('p2-unit-guide');
+    p2Guide.classList.add('hidden');
+
+    // Mobile Mirrored Layout for Local PvP
+    if (!vsAI && !isOnlineMode && isMobile()) {
+        gameScreen.classList.add('mobile-pvp-layout');
+        mobileContainer.classList.remove('hidden');
+        setupMobileMirroredUI(mobileContainer);
+    } else if (!vsAI && !isOnlineMode) {
+        // Desktop PvP Setup: Keyboard keys are used; mirrored on-screen buttons are removed.
+    }
+
     if (isOnlineMode) {
         if (myRole === 'p1') {
             p1Name.innerText = currentUser || "Player 1";
@@ -224,42 +250,52 @@ function initGame(vsAI) {
         p1Name.innerText = currentUser || "Player 1";
         p2Name.innerText = isAIMode ? "AI Bot" : "Player 2";
     }
-
-    const p2Guide = document.getElementById('p2-unit-guide');
-    if (!vsAI && !isOnlineMode) {
-        // Local PvP: Create the rotated top row for Player 2
-        p2Guide.innerHTML = document.getElementById('p1-unit-guide').innerHTML
-            .replace(/p1-unit-btn/g, 'p2-unit-btn')
-            .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
-        p2Guide.classList.remove('hidden');
-    } else {
-        p2Guide.classList.add('hidden');
-    }
-
-    // Mirror the Arena for Local PvP
-    const arenaHost = document.getElementById('arena-host');
-    const p1View = document.getElementById('p1-view');
-    // Remove existing mirror if any
-    const existingMirror = document.getElementById('p2-mirror-view');
-    if (existingMirror) existingMirror.remove();
-
-    if (!vsAI && !isOnlineMode) {
-        const mirror = p1View.cloneNode(true);
-        mirror.id = "p2-mirror-view";
-        mirror.classList.add('flipped');
-        arenaHost.insertBefore(mirror, p1View);
-    }
     
     const controls = document.getElementById('controls-text');
     if (isOnlineMode) {
-        controls.innerText = `Online Mode | You are ${myRole.toUpperCase()} | Keys: 1-9`;
+        const keyHint = myRole === 'p1' ? "Q,W,E,R,T,Y,U,I,O" : "1,2,3,4,5,6,7,8,9";
+        controls.innerText = `Online Mode | You are ${myRole.toUpperCase()} | Keys: ${keyHint}`;
     } else if (isAIMode) {
-        controls.innerText = "Player 1 Keys: 1-9 | AI Mode | Press Enter to Restart";
+        controls.innerText = "Player 1 Keys: Q,W,E,R,T,Y,U,I,O | AI Mode | Press Enter to Restart";
     } else {
-        controls.innerText = "P1: 1-9 | P2: Q,W,E,R,T,Y,U,I,O | Press Enter to Restart";
+        controls.innerText = isMobile() ? "Touch buttons to play!" : "P1: Q,W,E,R,T,Y,U,I,O | P2: 1-9 | Press Enter to Restart";
     }
     
     resetGame();
+}
+
+/**
+ * Clones the player boxes and unit guide for the flipped mobile player view.
+ */
+function setupMobileMirroredUI(container) {
+    // Clone Boxes for results visibility
+    const p1Box = document.getElementById('p1-box').cloneNode(true);
+    const p2Box = document.getElementById('p2-box').cloneNode(true);
+    
+    // Map internal IDs to -mobile variants for sync logic
+    const mapIds = (el, p) => {
+        el.id = `${p}-box-mobile`;
+        el.querySelector(`#${p}-display-name`).id = `${p}-display-name-mobile`;
+        el.querySelector(`#${p}-energy`).id = `${p}-energy-mobile`;
+        el.querySelector(`#${p}-status`).id = `${p}-status-mobile`;
+        const score = el.querySelector(`#${p}-score-container`);
+        if (score) score.id = `${p}-score-container-mobile`;
+    };
+
+    mapIds(p1Box, 'p1');
+    mapIds(p2Box, 'p2');
+
+    // Duplicate Unit Guide for P2 interaction
+    const p2Guide = document.getElementById('p1-unit-guide').cloneNode(true);
+    p2Guide.id = 'p2-unit-guide-mobile';
+    p2Guide.classList.remove('hidden');
+    p2Guide.innerHTML = p2Guide.innerHTML
+        .replace(/p1-unit-btn-/g, 'p2-unit-btn-mobile-')
+        .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
+
+    container.appendChild(p1Box);
+    container.appendChild(p2Box);
+    container.appendChild(p2Guide);
 }
 
 function goToMenu() {
@@ -531,51 +567,59 @@ function checkKill(attacker, defender) {
 }
 
 /**
- * Updates all mirrored UI elements simultaneously
+ * Updates the UI elements for both players based on current state.
  */
 function updateUI() {
-    const players = { p1, p2 };
+    // Player 1 UI
+    const p1Name = document.getElementById('p1-display-name');
+    const p1Energy = document.getElementById('p1-energy');
+    const p1ScoreEl = document.getElementById('p1-score');
+    const p1EnergyMob = document.getElementById('p1-energy-mobile');
+    const p1NameMob = document.getElementById('p1-display-name-mobile');
     
-    // Update all occurrences of labels (Normal and Mirrored)
-    const syncText = (cls, txt) => document.querySelectorAll(cls).forEach(el => el.innerText = txt);
+    const p1Text = (isOnlineMode && myRole === 'p2') ? "Opponent" : (currentUser || "Player 1");
+    if (p1Name) p1Name.innerText = p1Text;
+    if (p1NameMob) p1NameMob.innerText = p1Text;
+    if (p1Energy) p1Energy.innerText = p1.energy;
+    if (p1EnergyMob) p1EnergyMob.innerText = p1.energy;
+    if (p1ScoreEl) p1ScoreEl.innerText = p1Score;
 
-    syncText('.p1-name-label', (isOnlineMode && myRole === 'p2') ? "Opponent" : (currentUser || "Player 1"));
-    syncText('.p2-name-label', (isOnlineMode && myRole === 'p1') ? "Opponent" : (isAIMode ? "AI Bot" : "Player 2"));
-    
-    syncText('.p1-energy-val', p1.energy);
-    syncText('.p2-energy-val', p2.energy);
-    syncText('.p1-score-val', p1Score);
+    // Player 2 UI
+    const p2Name = document.getElementById('p2-display-name');
+    const p2NameMobile = document.getElementById('p2-display-name-mobile');
+    const p2Energy = document.getElementById('p2-energy');
+    const p2EnergyMobile = document.getElementById('p2-energy-mobile');
 
-    ['p1', 'p2'].forEach(pKey => {
-        for (let id = 1; id <= 9; id++) {
-            const btn = document.getElementById(`${pKey}-unit-btn-${id}`);
-            if (btn) {
-                btn.classList.toggle('disabled', UNITS[id].cost > players[pKey].energy);
-            }
-        }
-    });
+    const p2Text = (isOnlineMode && myRole === 'p1') ? "Opponent" : (isAIMode ? "AI Bot" : "Player 2");
+    if (p2Name) p2Name.innerText = p2Text;
+    if (p2NameMobile) p2NameMobile.innerText = p2Text;
+    if (p2Energy) p2Energy.innerText = p2.energy;
+    if (p2EnergyMobile) p2EnergyMobile.innerText = p2.energy;
 
-    // Update world-screen UI elements
-    if (document.getElementById('world-p1-energy')) {
-        document.getElementById('world-p1-energy').innerText = p1.energy;
+    // Update Button Disabled States
+    for (let id = 1; id <= 9; id++) {
+        const p1Btn = document.getElementById(`p1-unit-btn-${id}`);
+        if (p1Btn) p1Btn.classList.toggle('disabled', UNITS[id].cost > p1.energy);
+        
+        const p2Btn = document.getElementById(`p2-unit-btn-${id}`);
+        const p2BtnMobile = document.getElementById(`p2-unit-btn-mobile-${id}`);
+        if (p2Btn) p2Btn.classList.toggle('disabled', UNITS[id].cost > p2.energy);
+        if (p2BtnMobile) p2BtnMobile.classList.toggle('disabled', UNITS[id].cost > p2.energy);
     }
-    // ... other world updates
-}
 
-function updateUI() { // Rest of the function for World Mode
-    // [Existing world-screen code remains the same]
-    const worldP1InventoryWoodEl = document.getElementById('world-p1-inventory-wood');
-    if (worldP1InventoryWoodEl) worldP1InventoryWoodEl.innerText = p1.inventory.wood;
+    // World Screen Sync
+    const worldP1Energy = document.getElementById('world-p1-energy');
+    if (worldP1Energy) worldP1Energy.innerText = p1.energy;
+    
+    const invWood = document.getElementById('inv-wood-count');
+    if (invWood) invWood.innerText = `${p1.inventory.wood} / 100`;
 
-    const worldP2EnergyEl = document.getElementById('world-p2-energy');
-    if (worldP2EnergyEl) worldP2EnergyEl.innerText = p2.energy;
-    const worldP2StatusEl = document.getElementById('world-p2-status');
-    if (worldP2StatusEl) {
-        if (isOnlineMode && isInWorld) {
-            worldP2StatusEl.classList.remove('hidden');
-        } else {
-            worldP2StatusEl.classList.add('hidden');
-        }
+    const worldP2Energy = document.getElementById('world-p2-energy');
+    if (worldP2Energy) worldP2Energy.innerText = p2.energy;
+    
+    const worldP2Status = document.getElementById('world-p2-status');
+    if (worldP2Status) {
+        worldP2Status.classList.toggle('hidden', !(isOnlineMode && isInWorld));
     }
 }
 
@@ -583,19 +627,26 @@ function updateUI() { // Rest of the function for World Mode
  * Logs messages to all active battle log boxes (Normal and Mirrored)
  */
 function log(msg, clear = false) {
-    const logs = document.querySelectorAll('.battle-log-box');
-    logs.forEach(el => {
-        if (clear) el.innerHTML = "";
-        el.innerHTML += `<div style="border-bottom: 1px solid #333; padding: 2px 0;">${msg}</div>`;
-        el.scrollTop = el.scrollHeight;
-    });
+    const logEl = document.getElementById('battle-log');
+    if (logEl) {
+        if (clear) logEl.innerHTML = "";
+        logEl.innerHTML += `<div style="border-bottom: 1px solid #333; padding: 2px 0;">${msg}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
 }
 
 function updateStatus(player, text, color) {
-    document.querySelectorAll(`.${player}-status-val`).forEach(el => {
-        el.innerText = text;
-        el.style.color = color;
-    });
+    const statusEl = document.getElementById(`${player}-status`);
+    const statusElMobile = document.getElementById(`${player}-status-mobile`);
+    
+    if (statusEl) {
+        statusEl.innerText = text;
+        statusEl.style.color = color;
+    }
+    if (statusElMobile) {
+        statusElMobile.innerText = text;
+        statusElMobile.style.color = color;
+    }
 }
 
 function updateStatuses(p1Text, p2Text, color) {
@@ -616,7 +667,7 @@ function endGame() {
     if (iWon) {
         p1Score += 5;
         if (currentUser) {
-            localStorage.setItem(`ultimate_energy_score_${currentUser}`, p1Score);
+            saveScoreToServer(currentUser, p1Score);
         }
     }
 
@@ -626,6 +677,11 @@ function endGame() {
     updateUI();
     updateStatus('p1', p1.alive ? "WINNER" : "DEAD", p1.alive ? "#00ffcc" : "#ff4444");
     updateStatus('p2', p2.alive ? "WINNER" : "DEAD", p2.alive ? "#00ffcc" : "#ff4444");
+}
+
+function isMobile() {
+    return /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) || 
+           (navigator.maxTouchPoints > 0);
 }
 
 updateUI();
