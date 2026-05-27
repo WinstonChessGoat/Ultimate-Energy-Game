@@ -29,6 +29,10 @@ let protectiveCircleTimer = 0; // Remaining frames for the shield
 let lastTapTime = 0; // Track timing for mobile double-taps
 let lastWPressTime = 0; // Track timing for 'w' double-taps
 let isSprinting = false; // Whether the player is sprinting
+let smoothCamHeight = 80; // Interpolated camera height
+let smoothHorizonShift = 0; // Interpolated horizon shift
+let currentVel = 0; // Current movement velocity for momentum
+let currentRotVel = 0; // Current rotational velocity for smooth turns
 let harvestTimer = 0; // Current progress on cutting a tree
 let currentHarvestTarget = null; // Coordinates of tree being cut
 let playerAngle = 0; // Player's horizontal orientation
@@ -275,55 +279,86 @@ function toggleInventoryUI() {
  */
 function drawHuman(x, y, color, isMoving, isFacingAway = false, isAlive = true) {
     worldCtx.save();
-    // Shift so (0,0) is the base of the feet for better grounding
-    worldCtx.translate(x, y - 12); 
+    const lookShift = Math.tan(verticalAngle) * 3; // Subtle head tilt based on gaze
+    
+    // Anchor at ground base for realistic perspective
+    worldCtx.translate(x, y); 
 
     if (!isAlive) {
         worldCtx.rotate(Math.PI / 2); // Fall over if dead
-        worldCtx.translate(10, 0);
+        worldCtx.translate(0, -5);
     }
 
-    const bob = isMoving ? Math.sin(Date.now() / 150) * 3 : 0;
-    const legSwing = isMoving ? Math.sin(Date.now() / 150) * 6 : 0;
-
-    // Legs
-    worldCtx.fillStyle = '#222';
-    worldCtx.fillRect(-5, legSwing, 4, 10);
-    worldCtx.fillRect(1, -legSwing, 4, 10);
-
-    // Torso
-    worldCtx.fillStyle = color;
-    worldCtx.fillRect(-7, -17 + bob, 14, 18);
-
-    // Head (Back of head is solid hair color)
-    worldCtx.fillStyle = isFacingAway ? '#4b3621' : '#ffdbac';
+    // Ground Shadow for realism
+    worldCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     worldCtx.beginPath();
-    worldCtx.arc(0, -24 + bob, 6, 0, Math.PI * 2);
+    worldCtx.ellipse(0, 0, 10, 4, 0, 0, Math.PI * 2);
     worldCtx.fill();
 
-    // Extra Hair Detail (Only if facing away)
+    const bob = isMoving ? Math.sin(Date.now() / 150) * 2 : 0;
+    const swing = isMoving ? Math.sin(Date.now() / 150) * 0.4 : 0; // Rotational swing in radians
+
+    // 1. Draw Legs (Pivot from hips to prevent "breaking apart")
+    worldCtx.fillStyle = '#1a1a1a';
+    const hipY = -12;
+    
+    // Left Leg
+    worldCtx.save();
+    worldCtx.translate(-3, hipY);
+    worldCtx.rotate(swing);
+    worldCtx.fillRect(-2, 0, 4, 12);
+    worldCtx.restore();
+
+    // Right Leg
+    worldCtx.save();
+    worldCtx.translate(3, hipY);
+    worldCtx.rotate(-swing);
+    worldCtx.fillRect(-2, 0, 4, 12);
+    worldCtx.restore();
+
+    // 2. Upper Body (Head, Torso, Arms move as one unit for bobbing)
+    worldCtx.translate(0, bob);
+
+    // Torso (Main body block)
+    worldCtx.fillStyle = color;
+    worldCtx.fillRect(-7, -28, 14, 16);
+
+    // Head (Connected directly to torso)
+    const headY = -35 + lookShift;
+    worldCtx.fillStyle = isFacingAway ? '#4b3621' : '#ffdbac';
+    worldCtx.beginPath();
+    worldCtx.arc(0, headY, 7, 0, Math.PI * 2);
+    worldCtx.fill();
+
     if (isFacingAway) {
         worldCtx.fillStyle = '#3d2b1f'; // Darker hair shade
         worldCtx.beginPath();
-        worldCtx.arc(0, -22 + bob, 4, 0, Math.PI); // Nape of neck hair
+        worldCtx.arc(0, headY + 2, 5, 0, Math.PI);
         worldCtx.fill();
-    }
-
-    // Face (Only if facing camera)
-    if (!isFacingAway) {
+    } else {
         worldCtx.fillStyle = '#333';
-        const eyeHeight = -25 + bob;
+        const eyeHeight = headY - 1;
         worldCtx.beginPath();
-        worldCtx.arc(-2, eyeHeight, 1, 0, Math.PI * 2);
-        worldCtx.arc(2, eyeHeight, 1, 0, Math.PI * 2);
+        worldCtx.arc(-2.5, eyeHeight, 1.2, 0, Math.PI * 2);
+        worldCtx.arc(2.5, eyeHeight, 1.2, 0, Math.PI * 2);
         worldCtx.fill();
     }
 
-    // Arms
+    // 3. Arms (Pivot from shoulders)
     worldCtx.fillStyle = color;
-    const armY = -15 + bob;
-    worldCtx.fillRect(-11, armY - legSwing/2, 4, 10);
-    worldCtx.fillRect(7, armY + legSwing/2, 4, 10);
+    const shoulderY = -26;
+    
+    worldCtx.save();
+    worldCtx.translate(-7, shoulderY);
+    worldCtx.rotate(-swing * 0.8); // Opposite swing to legs for balance
+    worldCtx.fillRect(-4, 0, 4, 12);
+    worldCtx.restore();
+
+    worldCtx.save();
+    worldCtx.translate(7, shoulderY);
+    worldCtx.rotate(swing * 0.8);
+    worldCtx.fillRect(0, 0, 4, 12);
+    worldCtx.restore();
 
     worldCtx.restore();
 }
@@ -331,13 +366,13 @@ function drawHuman(x, y, color, isMoving, isFacingAway = false, isAlive = true) 
 /**
  * Renders a tree with 3D perspective
  */
-function drawTree3D(screenX, scale, horizonY) {
+function drawTree3D(screenX, scale, horizonY, camHeight = 80) {
     const trunkW = 30 * scale;
     const trunkH = 180 * scale; // Significantly taller
     const leafW = 120 * scale;
 
     const x = worldCanvas.width / 2 + screenX;
-    const groundY = horizonY + (80 + playerZ) * scale; 
+    const groundY = horizonY + (camHeight + playerZ) * scale; 
 
     // Trunk
     worldCtx.fillStyle = '#5C4033';
@@ -360,10 +395,10 @@ function drawTree3D(screenX, scale, horizonY) {
 /**
  * Draws a wood drop in 3D
  */
-function drawWoodDrop3D(screenX, scale, horizonY) {
+function drawWoodDrop3D(screenX, scale, horizonY, camHeight = 80) {
     const size = 15 * scale;
     const x = worldCanvas.width / 2 + screenX;
-    const y = horizonY + (100 + playerZ) * scale;
+    const y = horizonY + (camHeight + 20 + playerZ) * scale;
     worldCtx.fillStyle = '#8b4513';
     worldCtx.fillRect(x - size / 2, y - size / 2, size, size);
 }
@@ -371,11 +406,11 @@ function drawWoodDrop3D(screenX, scale, horizonY) {
 /**
  * Draws a bear in 3D
  */
-function drawBear3D(screenX, scale, horizonY, isAggro = false, lookRotation = 0) {
+function drawBear3D(screenX, scale, horizonY, camHeight = 80, isAggro = false, lookRotation = 0) {
     worldCtx.save();
     const bearScale = scale * 1.3; // Scaled to match the human character's visual height
     const x = worldCanvas.width / 2 + screenX;
-    const groundY = horizonY + (80 + playerZ) * scale;
+    const groundY = horizonY + (camHeight + playerZ) * scale;
 
     const faceShift = Math.sin(lookRotation) * 12;
     const isFacingAway = Math.abs(lookRotation) > Math.PI / 2;
@@ -573,30 +608,51 @@ function worldLoop() {
     // Determine Camera Position and Angle based on POV
     let camX = localPlayer.x;
     let camY = localPlayer.y;
-    let camAngle = playerAngle;
+    let camAngle = playerAngle; 
+    const tiltFactor = verticalAngle / MAX_PITCH; // -1 (down) to 1 (up)
+
+    // Target parameters for camera smoothing
+    let targetCamHeight = 80;
+    let targetHorizonShift = Math.tan(verticalAngle) * 180;
 
     if (currentPOV === 2) {
         // Second Person: Front-facing cinematic view looking at the player
-        camX = localPlayer.x + Math.cos(playerAngle) * 150;
-        camY = localPlayer.y + Math.sin(playerAngle) * 150;
+        const dynamicDist = 150 + tiltFactor * 60;
+        camX = localPlayer.x + Math.cos(playerAngle) * dynamicDist;
+        camY = localPlayer.y + Math.sin(playerAngle) * dynamicDist;
         camAngle = playerAngle + Math.PI;
+        targetCamHeight = 80 - Math.tan(verticalAngle) * 200;
     } else if (currentPOV === 3) {
         // Third Person: Follow camera behind the player
-        camX = localPlayer.x - Math.cos(playerAngle) * 100;
-        camY = localPlayer.y - Math.sin(playerAngle) * 100;
+        const dynamicDist = 100 + tiltFactor * 40;
+        camX = localPlayer.x - Math.cos(playerAngle) * dynamicDist;
+        camY = localPlayer.y - Math.sin(playerAngle) * dynamicDist;
         camAngle = playerAngle;
+        targetCamHeight = 80 - Math.tan(verticalAngle) * 450;
+        targetHorizonShift = Math.tan(verticalAngle) * 320;
     }
+
+    // Smooth camera damping
+    smoothCamHeight += (Math.max(20, targetCamHeight) - smoothCamHeight) * 0.12;
+    smoothHorizonShift += (targetHorizonShift - smoothHorizonShift) * 0.12;
+    const camHeight = smoothCamHeight;
+    const horizonY = (worldCanvas.height / 2) + smoothHorizonShift;
 
     let nextX = localPlayer.x;
     let nextY = localPlayer.y;
     let moved = false;
 
-    const currentForwardSpeed = isSprinting ? SPRINT_SPEED : PLAYER_SPEED;
+    // Movement Momentum: Gradually accelerate and decelerate for a more natural feel
+    const targetVel = (movement.w || movement.s || movement.a || movement.d) ? (isSprinting ? SPRINT_SPEED : PLAYER_SPEED) : 0;
+    currentVel += (targetVel - currentVel) * 0.15;
 
-    if (movement.w) { nextX += Math.cos(playerAngle) * currentForwardSpeed; nextY += Math.sin(playerAngle) * currentForwardSpeed; moved = true; }
-    if (movement.s) { nextX -= Math.cos(playerAngle) * PLAYER_SPEED; nextY -= Math.sin(playerAngle) * PLAYER_SPEED; moved = true; }
-    if (movement.a) { nextX += Math.sin(playerAngle) * PLAYER_SPEED; nextY -= Math.cos(playerAngle) * PLAYER_SPEED; moved = true; }
-    if (movement.d) { nextX -= Math.sin(playerAngle) * PLAYER_SPEED; nextY += Math.cos(playerAngle) * PLAYER_SPEED; moved = true; }
+    if (currentVel > 0.05) {
+        if (movement.w) { nextX += Math.cos(playerAngle) * currentVel; nextY += Math.sin(playerAngle) * currentVel; }
+        if (movement.s) { nextX -= Math.cos(playerAngle) * currentVel; nextY -= Math.sin(playerAngle) * currentVel; }
+        if (movement.a) { nextX += Math.sin(playerAngle) * currentVel; nextY -= Math.cos(playerAngle) * currentVel; }
+        if (movement.d) { nextX -= Math.sin(playerAngle) * currentVel; nextY += Math.cos(playerAngle) * currentVel; }
+        moved = true;
+    }
     
     if (moved) {
         // Tree collision: Stop player if walking into a trunk
@@ -606,11 +662,17 @@ function worldLoop() {
         }
     }
 
-    // Looking logic
+    // Looking logic: Uniform and direct for all perspectives (Down = Look Down, Up = Look Up)
     if (movement.arrowup) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
     if (movement.arrowdown) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
-    if (movement.arrowleft) { playerAngle -= ROTATION_SPEED; moved = true; }
-    if (movement.arrowright) { playerAngle += ROTATION_SPEED; moved = true; }
+
+    // Rotation inertia
+    const targetRotVel = movement.arrowleft ? -ROTATION_SPEED : (movement.arrowright ? ROTATION_SPEED : 0);
+    currentRotVel += (targetRotVel - currentRotVel) * 0.15;
+    if (Math.abs(currentRotVel) > 0.001) {
+        playerAngle += currentRotVel;
+        moved = true;
+    }
 
     // Clamp player position (arbitrary bounds for visual stability, world is infinite conceptually)
     localPlayer.x = Math.max(-10000, Math.min(10000, localPlayer.x));
@@ -630,10 +692,6 @@ function worldLoop() {
     if (moved && isOnlineMode && socket) {
         socket.send(JSON.stringify({ type: 'POS', x: localPlayer.x, y: localPlayer.y }));
     }
-
-    // Clear canvas
-    const horizonShift = Math.tan(verticalAngle) * 400; // Focal constant for vertical look
-    const horizonY = (worldCanvas.height / 2) + horizonShift;
 
     worldCtx.fillStyle = '#87CEEB'; // Sky
     worldCtx.fillRect(0, 0, worldCanvas.width, horizonY);
@@ -737,12 +795,12 @@ function worldLoop() {
     // Draw objects
     objects.forEach(obj => {
         const scale = 200 / obj.x;
-        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY, obj.wx, obj.wy);
-        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY, obj.aggro, obj.lookRotation);
-        else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale, horizonY);
+        if (obj.type === 'tree') drawTree3D(obj.y * scale, scale, horizonY, camHeight);
+        else if (obj.type === 'bear') drawBear3D(obj.y * scale, scale, horizonY, camHeight, obj.aggro, obj.lookRotation);
+        else if (obj.type === 'drop') drawWoodDrop3D(obj.y * scale, scale, horizonY, camHeight);
         else if (obj.type === 'shield_segment') {
             const x = worldCanvas.width / 2 + obj.y * scale;
-            const y = horizonY + (5 + playerZ) * scale; // Moved closer to eye level so it's visible at a 15-unit radius
+            const y = horizonY + (camHeight - 75 + playerZ) * scale; // Adjust shield relative to eye level
             
             // Realistic wood texture gradient for a "higher level" look
             const woodGrad = worldCtx.createLinearGradient(x - 10 * scale, 0, x + 10 * scale, 0);
@@ -762,19 +820,34 @@ function worldLoop() {
         }
         else if (obj.type === 'local_player') {
             worldCtx.save();
-            const x = worldCanvas.width / 2 + obj.y * scale;
-            // Ensure the local player position accounts for jumping (obj.z)
-            const y = horizonY + (80 + obj.z) * scale; 
+            const humanFixedDrawScale = 2.5; // Fixed scale for human drawing to prevent enlargement
+            
+            // Anchor the player to a fixed screen position in 2nd and 3rd POV.
+            // This keeps them grounded and visible regardless of camera tilt or rotation.
+            let x = worldCanvas.width / 2;
+            let y = worldCanvas.height * 0.8; // Fixed floor anchor for the feet
+
+            // Allow jumping to move the player vertically from the anchor
+            y -= obj.z * 2.5;
+
+            // Strict Clamping: Double-check the character stays within the canvas
+            const headOffset = 45 * humanFixedDrawScale; 
+            const sideMargin = 20 * humanFixedDrawScale;
+            const footMargin = 5 * humanFixedDrawScale;
+            x = Math.max(sideMargin, Math.min(worldCanvas.width - sideMargin, x));
+            y = Math.max(headOffset, Math.min(worldCanvas.height - footMargin, y));
+
             worldCtx.translate(x, y);
-            // Reduced scale for a more natural appearance in 2nd and 3rd POV
-            worldCtx.scale(scale * 2.5, scale * 2.5); 
+            // Use a fixed scale for drawing the human to prevent enlargement
+            worldCtx.scale(humanFixedDrawScale, humanFixedDrawScale); 
             drawHuman(0, 0, '#4444ff', obj.isMoving, currentPOV === 3, obj.alive); 
             worldCtx.restore();
         }
         else if (obj.type === 'opponent') {
             worldCtx.save();
-            worldCtx.translate(worldCanvas.width/2 + obj.y * scale, horizonY + (80 + playerZ) * scale);
-            worldCtx.scale(scale * 2, scale * 2);
+            worldCtx.translate(worldCanvas.width/2 + obj.y * scale, horizonY + (camHeight + playerZ) * scale);
+            const opponentFixedDrawScale = 2.0; // Fixed scale for opponent drawing
+            worldCtx.scale(opponentFixedDrawScale, opponentFixedDrawScale);
             drawHuman(0, 0, '#ff4444', false);
             worldCtx.restore();
         }
