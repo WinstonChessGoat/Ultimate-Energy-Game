@@ -98,66 +98,6 @@ async function updateScoreboard() {
 }
 
 /**
- * Trading System Logic
- */
-function tradeWoodForScore() {
-    const p = myRole === 'p1' ? p1 : p2;
-    if (p.inventory.wood >= 20) {
-        p.inventory.wood -= 20;
-        p1Score += 5;
-        if (currentUser) saveScoreToServer(currentUser, p1Score);
-        log("System: Traded 20 Wood for 5 Score Points!");
-        syncInventory();
-    }
-}
-
-function tradeWoodForAxe() {
-    const p = myRole === 'p1' ? p1 : p2;
-    if (p.inventory.wood >= 5) {
-        p.inventory.wood -= 5;
-        p.inventory.axe += 1;
-        log("System: Traded 5 Wood for a sturdy Axe!");
-        syncInventory();
-    }
-}
-
-function tradeWoodForDefense() {
-    const p = myRole === 'p1' ? p1 : p2;
-    if (p.inventory.wood >= 1) {
-        if (typeof protectiveCircleTimer !== 'undefined' && protectiveCircleTimer > 0) {
-            log("System: Shield is already active!");
-            return;
-        }
-        p.inventory.wood -= 1;
-        protectiveCircleTimer = 420; // Activate immediately (7 seconds)
-        log("System: Wooden Shield activated!");
-        syncInventory();
-    }
-}
-
-function syncInventory() {
-    const p = myRole === 'p1' ? p1 : p2;
-    updateUI();
-    if (isOnlineMode && socket) {
-        socket.send(JSON.stringify({ 
-            type: 'INVENTORY_UPDATE',
-            inventoryWood: p.inventory.wood,
-            inventoryAxe: p.inventory.axe
-        }));
-    }
-    // Refresh visual counts if inventory is open
-    if (!document.getElementById('inventory-overlay-box').classList.contains('hidden')) {
-        document.getElementById('inv-wood-count').innerText = `${p.inventory.wood} / 100`;
-        document.getElementById('inv-axe-count').innerText = p.inventory.axe;
-        
-        // Enable/Disable buttons based on wood count
-        document.getElementById('trade-score-btn').disabled = p.inventory.wood < 20;
-        document.getElementById('trade-axe-btn').disabled = p.inventory.wood < 5;
-        document.getElementById('trade-def-btn').disabled = p.inventory.wood < 1;
-    }
-}
-
-/**
  * Handles signing out the user and wiping their saved progress from storage.
  */
 function handleSignOut() {

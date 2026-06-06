@@ -8,23 +8,15 @@
 const worldCanvas = document.getElementById('worldCanvas');
 const worldCtx = worldCanvas.getContext('2d');
 
-const CHUNK_SIZE = 400; // Pixels per chunk
-const TREE_DENSITY = 0.06; // Sparse forest for more realistic spacing
 const PLAYER_SPEED = 3; // Pixels per frame
 const SPRINT_SPEED = 10.5; // Faster than bear's 9.5
 const ROTATION_SPEED = 0.05; // Radians per frame
-const CELL_SIZE = 25; // Size of a grid cell for tree placement
-const HARVEST_TIME_REQUIRED = 180; // 3 seconds at 60fps
-const HARVEST_TIME_AXE = 90; // 1.5 seconds at 60fps
 const GRAVITY = 0.4;
 const JUMP_FORCE = 8;
 const MAX_PITCH = 50 * (Math.PI / 180); // 50 degrees in radians
 
 let movement = { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false };
-let destroyedTrees = new Set(); // Stores coordinates of cut trees
 let woodDrops = []; // Stores active wood drops
-let bearOffsets = {}; // Persistent offsets for moving bears
-let killedBears = new Set(); // Stores coordinates of killed bears
 let protectiveCircleTimer = 0; // Remaining frames for the shield
 let lastTapTime = 0; // Track timing for mobile double-taps
 let lastWPressTime = 0; // Track timing for 'w' double-taps
@@ -33,8 +25,6 @@ let smoothCamHeight = 80; // Interpolated camera height
 let smoothHorizonShift = 0; // Interpolated horizon shift
 let currentVel = 0; // Current movement velocity for momentum
 let currentRotVel = 0; // Current rotational velocity for smooth turns
-let harvestTimer = 0; // Current progress on cutting a tree
-let currentHarvestTarget = null; // Coordinates of tree being cut
 let playerAngle = 0; // Player's horizontal orientation
 let playerZ = 0; // Player height (for jumping)
 let zVelocity = 0; // Vertical speed
@@ -64,13 +54,6 @@ function playPlopSound() {
 
     osc.start();
     osc.stop(worldAudioCtx.currentTime + 0.1);
-}
-
-// Procedural hash function for deterministic tree placement across chunks
-function worldHash(x, y) {
-    // Using a larger prime and a different seed for better distribution
-    const h = Math.sin(x * 12345.6789 + y * 98765.4321 + 54321) * 43758.5453123;
-    return h - Math.floor(h);
 }
 
 window.addEventListener('keydown', (e) => {
@@ -232,8 +215,6 @@ function handleWorldInputStart(e) {
 
 function handleWorldInputEnd() {
     movement.b = false;
-    harvestTimer = 0;
-    currentHarvestTarget = null;
 }
 
 function handleWorldInteraction(worldX, worldY) {
@@ -364,35 +345,6 @@ function drawHuman(x, y, color, isMoving, isFacingAway = false, isAlive = true) 
 }
 
 /**
- * Renders a tree with 3D perspective
- */
-function drawTree3D(screenX, scale, horizonY, camHeight = 80) {
-    const trunkW = 30 * scale;
-    const trunkH = 180 * scale; // Significantly taller
-    const leafW = 120 * scale;
-
-    const x = worldCanvas.width / 2 + screenX;
-    const groundY = horizonY + (camHeight + playerZ) * scale; 
-
-    // Trunk
-    worldCtx.fillStyle = '#5C4033';
-    worldCtx.fillRect(x - trunkW / 2, groundY - trunkH, trunkW, trunkH);
-
-    // Foliage (Cone layers)
-    worldCtx.fillStyle = '#2d5a27';
-    const foliageTop = groundY - trunkH;
-    for (let i = 0; i < 4; i++) {
-        const layerY = foliageTop - (i * 40 * scale);
-        const layerW = leafW * (1.2 - i * 0.25);
-        worldCtx.beginPath();
-        worldCtx.moveTo(x - layerW / 2, layerY);
-        worldCtx.lineTo(x + layerW / 2, layerY);
-        worldCtx.lineTo(x, layerY - 80 * scale);
-        worldCtx.fill();
-    }
-}
-
-/**
  * Draws a wood drop in 3D
  */
 function drawWoodDrop3D(screenX, scale, horizonY, camHeight = 80) {
@@ -403,195 +355,7 @@ function drawWoodDrop3D(screenX, scale, horizonY, camHeight = 80) {
     worldCtx.fillRect(x - size / 2, y - size / 2, size, size);
 }
 
-/**
- * Draws a bear in 3D
- */
-function drawBear3D(screenX, scale, horizonY, camHeight = 80, isAggro = false, lookRotation = 0) {
-    worldCtx.save();
-    const bearScale = scale * 1.3; // Scaled to match the human character's visual height
-    const x = worldCanvas.width / 2 + screenX;
-    const groundY = horizonY + (camHeight + playerZ) * scale;
-
-    const faceShift = Math.sin(lookRotation) * 12;
-    const isFacingAway = Math.abs(lookRotation) > Math.PI / 2;
-
-    worldCtx.translate(x, groundY);
-    worldCtx.scale(bearScale, bearScale);
-
-    const walkCycle = Math.sin(Date.now() / 150);
-    const furColor = '#3d2b1f';
-    const shadowColor = '#2a1d15';
-
-    // Front-Facing Body
-    worldCtx.fillStyle = furColor;
-    worldCtx.beginPath(); worldCtx.ellipse(0, -20, 22, 28, 0, 0, Math.PI * 2); worldCtx.fill();
-    
-    // Front Legs
-    const legY = -5 + (isAggro ? walkCycle * 5 : 0);
-    worldCtx.fillRect(-18, legY, 10, 20);
-    worldCtx.fillRect(8, legY, 10, 20);
-    // Claws
-    worldCtx.fillStyle = '#111';
-    for(let i=0; i<3; i++) {
-        worldCtx.fillRect(-17 + i*3, legY + 18, 2, 4);
-        worldCtx.fillRect(9 + i*3, legY + 18, 2, 4);
-    }
-
-    // Head
-    worldCtx.fillStyle = furColor;
-    worldCtx.beginPath(); worldCtx.arc(faceShift * 0.2, -45, 18, 0, Math.PI * 2); worldCtx.fill();
-    
-    // Ears
-    worldCtx.fillStyle = furColor;
-    const earShift = faceShift * 0.5;
-    worldCtx.beginPath(); 
-    worldCtx.arc(-12 + earShift, -58, 6, 0, Math.PI * 2); 
-    worldCtx.arc(12 + earShift, -58, 6, 0, Math.PI * 2); 
-    worldCtx.fill();
-
-    if (!isFacingAway) {
-        // Snout
-        worldCtx.fillStyle = shadowColor;
-        worldCtx.beginPath(); worldCtx.ellipse(faceShift, -42, 10, 8, 0, 0, Math.PI * 2); worldCtx.fill();
-        worldCtx.fillStyle = 'black';
-        worldCtx.beginPath(); worldCtx.arc(faceShift, -42, 3, 0, Math.PI * 2); worldCtx.fill();
-
-        // Eyes (Turn red when aggro)
-        worldCtx.fillStyle = isAggro ? '#ff0000' : 'white';
-        worldCtx.beginPath(); worldCtx.arc(-7 + faceShift, -48, 3, 0, Math.PI * 2); worldCtx.arc(7 + faceShift, -48, 3, 0, Math.PI * 2); worldCtx.fill();
-        worldCtx.fillStyle = 'black';
-        worldCtx.beginPath(); worldCtx.arc(-6.5 + faceShift, -48, 1.5, 0, Math.PI * 2); worldCtx.arc(7.5 + faceShift, -48, 1.5, 0, Math.PI * 2); worldCtx.fill();
-    }
-
-    worldCtx.restore();
-}
-
 function harvestAtPlayerPos() { /* Deprecated in First POV */ }
-
-/**
- * Core harvesting logic for the 3-second hold
- */
-function breakTreeAtTarget(tx, ty) {
-    const localPlayer = myRole === 'p1' ? p1 : p2;
-    destroyedTrees.add(`${tx},${ty}`);
-    woodDrops.push({ x: tx + CELL_SIZE / 2, y: ty + CELL_SIZE / 2, amount: 1 });
-    log("System: Tree broken!");
-
-    // Axe durability logic
-    if (localPlayer.inventory.axe > 0) {
-        if (localPlayer.axeUsesLeft <= 0) {
-            localPlayer.axeUsesLeft = 50; // Initialize durability for the current axe
-        }
-        localPlayer.axeUsesLeft--;
-        if (localPlayer.axeUsesLeft <= 0) {
-            localPlayer.inventory.axe--;
-            log("System: Your axe has broken!");
-            if (typeof syncInventory === 'function') syncInventory();
-        }
-    }
-    return true;
-}
-
-/**
- * Efficiently checks if a world coordinate collides with any tree trunk
- */
-function isCollidingWithTree(nx, ny) {
-    const trunkRadius = 22;
-    const checkRange = 30; // Small radius for performance
-    
-    const startX = Math.floor((nx - checkRange) / CELL_SIZE) * CELL_SIZE;
-    const endX = Math.ceil((nx + checkRange) / CELL_SIZE) * CELL_SIZE;
-    const startY = Math.floor((ny - checkRange) / CELL_SIZE) * CELL_SIZE;
-    const endY = Math.ceil((ny + checkRange) / CELL_SIZE) * CELL_SIZE;
-
-    for (let wx = startX; wx <= endX; wx += CELL_SIZE) {
-        for (let wy = startY; wy <= endY; wy += CELL_SIZE) {
-            if (worldHash(wx, wy) < TREE_DENSITY && !destroyedTrees.has(`${wx},${wy}`)) {
-                if (Math.hypot(nx - wx, ny - wy) < trunkRadius) return true;
-            }
-        }
-    }
-    return false;
-}
-
-/**
- * Calculates and draws bear behavior in 3D space
- */
-function processBear3D(cx, cy, localPlayer, camX, camY) {
-    // Prevent bears from spawning in chunks containing the player spawn points (0,0 and 1,0)
-    if (cy === 0 && (cx === 0 || cx === 1)) return null;
-
-    // 1% chance per chunk to have a bear (Extremely rare frequency)
-    if (worldHash(cx + 500, cy + 500) < 0.01 && !killedBears.has(`${cx},${cy}`)) {
-        const bBaseX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
-        const bBaseY = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
-        
-        if (!bearOffsets[`${cx},${cy}`]) {
-            // Prevent bears from spawning too close to the human player
-            const spawnDist = Math.hypot(localPlayer.x - bBaseX, localPlayer.y - bBaseY);
-            if (spawnDist < 450) return null;
-            bearOffsets[`${cx},${cy}`] = {x: 0, y: 0, aggro: false};
-        }
-        const offset = bearOffsets[`${cx},${cy}`];
-        const bX = bBaseX + offset.x;
-        const bY = bBaseY + offset.y;
-        
-        const distToPlayer = Math.hypot(localPlayer.x - bX, localPlayer.y - bY);
-
-        // The bear is now always aggressive and ignores detection distance
-        offset.aggro = true;
-        let angle = Math.atan2(localPlayer.y - bY, localPlayer.x - bX);
-        const speed = 9.5; // Aggressive run speed
-
-        let nextX = bX + Math.cos(angle) * speed;
-        let nextY = bY + Math.sin(angle) * speed;
-
-        // Safe zone check (keep bears away from spawn points)
-        if (Math.hypot(nextX - 100, nextY - 200) > 200 && Math.hypot(nextX - 500, nextY - 200) > 200) {
-            // Smarter Pathfinding: Steering behavior to avoid trees
-            if (isCollidingWithTree(nextX, nextY)) {
-                let steered = false;
-                for (let i = 1; i <= 6; i++) {
-                    const steerOffset = i * 15 * (Math.PI / 180);
-                    if (!isCollidingWithTree(bX + Math.cos(angle - steerOffset) * speed, bY + Math.sin(angle - steerOffset) * speed)) {
-                        angle -= steerOffset; steered = true; break;
-                    }
-                    if (!isCollidingWithTree(bX + Math.cos(angle + steerOffset) * speed, bY + Math.sin(angle + steerOffset) * speed)) {
-                        angle += steerOffset; steered = true; break;
-                    }
-                }
-                if (steered) {
-                    offset.x += Math.cos(angle) * speed;
-                    offset.y += Math.sin(angle) * speed;
-                }
-            } else {
-                offset.x += Math.cos(angle) * speed;
-                offset.y += Math.sin(angle) * speed;
-            }
-        }
-        
-        // Collision detection
-        if (protectiveCircleTimer > 0 && distToPlayer < 15 + 15) {
-            killedBears.add(`${cx},${cy}`);
-            log("System: Bear killed by protective circle!");
-        } else if (distToPlayer < 20 + 15) {
-            log("System: A bear caught you! Teleporting and losing wood...");
-            localPlayer.x = myRole === 'p1' ? 100 : 500;
-            localPlayer.y = 200;
-            localPlayer.inventory.wood = 0;
-            localPlayer.energy = 0;
-            updateUI();
-            if (isOnlineMode && socket) {
-                socket.send(JSON.stringify({ type: 'POS', x: localPlayer.x, y: localPlayer.y }));
-                socket.send(JSON.stringify({ type: 'INVENTORY_UPDATE', inventoryWood: 0 }));
-                socket.send(JSON.stringify({ type: 'ENERGY_UPDATE', energy: 0 }));
-            }
-        }
-        
-        return { type: 'bear', x: bX, y: bY, aggro: offset.aggro };
-    }
-    return null;
-}
 
 function worldLoop() {
     if (!isInWorld) {
@@ -846,40 +610,13 @@ function worldLoop() {
         }
     });
 
-    // Harvesting Logic
-    if (movement.b && nearestTree && minTreeDist < 160) { // Reach multiplied by 2 (80 -> 160)
-        const requiredTime = (localPlayer.inventory.axe > 0) ? HARVEST_TIME_AXE : HARVEST_TIME_REQUIRED;
-        if (!currentHarvestTarget || currentHarvestTarget.x !== nearestTree.wx || currentHarvestTarget.y !== nearestTree.wy) {
-            currentHarvestTarget = { x: nearestTree.wx, y: nearestTree.wy };
-            harvestTimer = 0;
-        }
-        harvestTimer++;
-        
-        // Progress Bar
-        const progress = harvestTimer / requiredTime;
-        worldCtx.fillStyle = '#222';
-        worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100, 10);
-        worldCtx.fillStyle = '#00ffcc';
-        worldCtx.fillRect(worldCanvas.width / 2 - 50, worldCanvas.height / 2 - 100, 100 * progress, 10);
-
-        if (harvestTimer >= requiredTime) {
-            breakTreeAtTarget(nearestTree.wx, nearestTree.wy);
-            harvestTimer = 0;
-            currentHarvestTarget = null;
-        }
-    } else {
-        harvestTimer = 0;
-        currentHarvestTarget = null;
-    }
+    handleTreeHarvesting(nearestTree, minTreeDist, localPlayer);
 
     // Wood collection (Distance check in 2D space)
     woodDrops = woodDrops.filter((drop) => {
         const d = Math.hypot(localPlayer.x - drop.x, localPlayer.y - drop.y);
         if (d < 60) {
-            localPlayer.inventory.wood = Math.min(100, localPlayer.inventory.wood + 1);
-            localPlayer.energy = Math.min(100, localPlayer.energy + 1);
-            playPlopSound();
-            updateUI();
+            addWoodToInventory(localPlayer);
             return false;
         }
         return true;
