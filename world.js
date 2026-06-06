@@ -821,21 +821,10 @@ function worldLoop() {
         else if (obj.type === 'local_player') {
             worldCtx.save();
             const humanFixedDrawScale = 2.5; // Fixed scale for human drawing to prevent enlargement
-            
-            // Anchor the player to a fixed screen position in 2nd and 3rd POV.
-            // This keeps them grounded and visible regardless of camera tilt or rotation.
-            let x = worldCanvas.width / 2;
-            let y = worldCanvas.height * 0.8; // Fixed floor anchor for the feet
 
-            // Allow jumping to move the player vertically from the anchor
-            y -= obj.z * 2.5;
-
-            // Strict Clamping: Double-check the character stays within the canvas
-            const headOffset = 45 * humanFixedDrawScale; 
-            const sideMargin = 20 * humanFixedDrawScale;
-            const footMargin = 5 * humanFixedDrawScale;
-            x = Math.max(sideMargin, Math.min(worldCanvas.width - sideMargin, x));
-            y = Math.max(headOffset, Math.min(worldCanvas.height - footMargin, y));
+            // Anchor the player to the projected ground position.
+            let x = worldCanvas.width / 2 + obj.y * scale;
+            let y = horizonY + (camHeight + playerZ - obj.z) * scale;
 
             worldCtx.translate(x, y);
             // Use a fixed scale for drawing the human to prevent enlargement
