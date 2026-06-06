@@ -662,9 +662,14 @@ function worldLoop() {
         }
     }
 
-    // Looking logic: Uniform and direct for all perspectives (Down = Look Down, Up = Look Up)
-    if (movement.arrowup) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
-    if (movement.arrowdown) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
+    // Looking logic: Inverted for 2nd POV to feel natural since camera is facing the player
+    if (currentPOV === 2) {
+        if (movement.arrowup) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
+        if (movement.arrowdown) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
+    } else {
+        if (movement.arrowup) verticalAngle = Math.min(MAX_PITCH, verticalAngle + 0.03);
+        if (movement.arrowdown) verticalAngle = Math.max(-MAX_PITCH, verticalAngle - 0.03);
+    }
 
     // Rotation inertia
     const targetRotVel = movement.arrowleft ? -ROTATION_SPEED : (movement.arrowright ? ROTATION_SPEED : 0);
@@ -821,8 +826,7 @@ function worldLoop() {
         else if (obj.type === 'local_player') {
             worldCtx.save();
             const humanFixedDrawScale = 2.5; // Fixed scale for human drawing to prevent enlargement
-
-            // Anchor the player to the projected ground position.
+            
             let x = worldCanvas.width / 2 + obj.y * scale;
             let y = horizonY + (camHeight + playerZ - obj.z) * scale;
 
