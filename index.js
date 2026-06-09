@@ -21,6 +21,13 @@ db.serialize(() => {
 
 app.use(express.json());
 
+// Enable CORS so your GitHub Pages frontend can talk to this Render server
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 // Manage rooms: RoomID -> Set of sockets
 const rooms = new Map();
 

@@ -654,7 +654,7 @@ function updateStatuses(p1Text, p2Text, color) {
     updateStatus('p2', p2Text, color);
 }
 
-function endGame() {
+async function endGame() {
     if (!p1.alive && !p2.alive) log("GAME OVER: DRAW!");
     else if (!p1.alive) log("GAME OVER: PLAYER 2 VICTORIOUS!");
     else if (!p2.alive) {
@@ -667,7 +667,7 @@ function endGame() {
     if (iWon) {
         p1Score += 5;
         if (currentUser) {
-            saveScoreToServer(currentUser, p1Score);
+            await saveScoreToServer(currentUser, p1Score);
         }
     }
 

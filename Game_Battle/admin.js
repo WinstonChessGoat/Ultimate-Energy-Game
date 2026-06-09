@@ -2,6 +2,46 @@
  * Main Hub, Authentication, and UI Navigation Logic
  */
 
+// IndexedDB Setup for local persistence
+const DB_NAME = 'UltimateEnergyDB';
+const DB_STORE = 'playerScores';
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+                db.createObjectStore(DB_STORE, { keyPath: 'username' });
+            }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function getLocalScore(username) {
+    const db = await initDB();
+    return new Promise((resolve) => {
+        const transaction = db.transaction([DB_STORE], 'readonly');
+        const request = transaction.objectStore(DB_STORE).get(username);
+        request.onsuccess = () => resolve(request.result ? request.result.score : 0);
+        request.onerror = () => resolve(0);
+    });
+}
+
+async function saveLocalScore(username, score) {
+    const db = await initDB();
+    const transaction = db.transaction([DB_STORE], 'readwrite');
+    transaction.objectStore(DB_STORE).put({ username, score });
+}
+
+async function deleteLocalScore(username) {
+    const db = await initDB();
+    const transaction = db.transaction([DB_STORE], 'readwrite');
+    transaction.objectStore(DB_STORE).delete(username);
+}
+
 async function handleSignIn() {
     const input = document.getElementById('username-input');
     const name = input.value.trim();
@@ -11,13 +51,18 @@ async function handleSignIn() {
     localStorage.setItem('ultimate_energy_current_session', currentUser);
 
     try {
-        const response = await fetch(`/api/score/${currentUser}`);
+        const response = await fetch(`${IS_PROD ? RENDER_URL : ''}/api/score/${currentUser}`);
         const data = await response.json();
-        p1Score = data.score || 0;
+        
+        // If server has the score, use it. Otherwise, check local IndexedDB.
+        if (data.score && data.score > 0) {
+            p1Score = data.score;
+        } else {
+            p1Score = await getLocalScore(currentUser);
+        }
     } catch (err) {
-        console.error("Failed to fetch score from DB, falling back to local:", err);
-        const savedData = localStorage.getItem(`ultimate_energy_score_${currentUser}`);
-        p1Score = savedData ? parseInt(savedData) : 0;
+        console.warn("Server score fetch failed, falling back to IndexedDB:", err);
+        p1Score = await getLocalScore(currentUser);
     }
 
     document.getElementById('auth-screen').classList.add('hidden');
@@ -27,9 +72,9 @@ async function handleSignIn() {
     updateUI();
 }
 
-function saveScoreToServer(username, score) {
-    localStorage.setItem(`ultimate_energy_score_${username}`, score); // Local fallback
-    fetch('/api/score', {
+async function saveScoreToServer(username, score) {
+    await saveLocalScore(username, score); // Always save to IndexedDB first
+    fetch(`${IS_PROD ? RENDER_URL : ''}/api/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, score })
@@ -77,8 +122,20 @@ async function updateScoreboard() {
     if (!list) return;
     list.innerHTML = "";
 
-    const response = await fetch('/api/leaderboard');
-    const scores = await response.json();
+    let scores = [];
+    try {
+        const response = await fetch(`${IS_PROD ? RENDER_URL : ''}/api/leaderboard`);
+        if (response.ok) scores = await response.json();
+        else throw new Error("API Offline");
+    } catch (err) {
+        console.warn("Leaderboard API failed, using local data:", err);
+        const db = await initDB();
+        scores = await new Promise((resolve) => {
+            const req = db.transaction([DB_STORE], 'readonly').objectStore(DB_STORE).getAll();
+            req.onsuccess = () => resolve(req.result);
+        });
+        scores.sort((a, b) => b.score - a.score);
+    }
 
     scores.slice(0, 5).forEach((entry, index) => {
         const div = document.createElement('div');
@@ -100,11 +157,11 @@ async function updateScoreboard() {
 /**
  * Handles signing out the user and wiping their saved progress from storage.
  */
-function handleSignOut() {
+async function handleSignOut() {
     if (!confirm("Are you sure? This will sign you out and DELETE your saved score progress.")) return;
 
     if (currentUser) {
-        localStorage.removeItem(`ultimate_energy_score_${currentUser}`);
+        await deleteLocalScore(currentUser);
         localStorage.removeItem('ultimate_energy_current_session');
     }
     
