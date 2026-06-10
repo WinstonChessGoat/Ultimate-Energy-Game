@@ -127,10 +127,10 @@
         }
 
         #p1-unit-guide, #p2-unit-guide {
-            margin-top: 30px;
+            margin-top: 10px;
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
+            gap: 5px;
             width: 95%;
             max-width: 900px;
             justify-content: center;
@@ -494,76 +494,46 @@
             justify-content: space-between;
             height: 100vh; /* Take full viewport height */
             width: 100vw; /* Take full viewport width */
-            padding: 10px;
+            padding: 5px;
             box-sizing: border-box;
         }
+        
         .mobile-pvp-layout #game-screen-content {
             display: flex;
             flex-direction: column;
-            flex-grow: 1;
-            justify-content: space-between;
+            justify-content: flex-start;
+            height: auto;
         }
+
         .mobile-pvp-layout #mobile-p2-ui-container {
-            order: 1; /* P2's arena part */
             transform: rotate(180deg);
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding-bottom: 5px;
-            border-bottom: 2px dashed #333;
+            margin-bottom: 10px;
         }
         
-        /* Hide the original boxes in the center when in mobile mirrored mode */
-        .mobile-pvp-layout #main-arena #game-container {
-            display: none;
-        }
-
         .mobile-pvp-layout #main-arena {
-            order: 2; /* Central elements */
-            flex-grow: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 5px 0;
         }
-        .mobile-pvp-layout #game-container {
-            flex-direction: column; /* Stack P1 and P2 boxes if they were both in main-arena */
-            gap: 10px;
-        }
+
         .mobile-pvp-layout #log-container {
             flex-grow: 1;
             width: 100%;
             max-width: 400px; /* Limit log width */
         }
-        .mobile-pvp-layout #timer-display {
-            margin-bottom: 10px;
-        }
 
         .mobile-pvp-layout #p1-unit-guide {
-            order: 3; /* P1's arena part */
-            padding-top: 20px;
+            display: grid !important;
+            margin-top: auto !important;
+            padding-top: 10px;
             border-top: 2px dashed #333;
-        }
-        .mobile-pvp-layout #controls-text {
-            order: 4;
-            margin-top: 5px;
-            font-size: 0.7em;
-        }
-        .mobile-pvp-layout .menu-btn[onclick="goToMenu()"] {
-            order: 5;
-            margin-top: 5px;
-            padding: 5px 10px;
         }
 
         /* Ensure unit cards and player boxes are centered within their containers */
-        .mobile-pvp-layout .unit-guide-container {
-            width: 98%;
-            display: grid !important;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 5px;
-            margin: 5px auto;
-        }
         .mobile-pvp-layout .player-box {
             width: auto; /* Allow player box to shrink/grow */
             max-width: 250px;
@@ -572,6 +542,9 @@
         /* Hide desktop P2 elements in mobile PvP */
         #game-screen.mobile-pvp-layout #p2-box { display: none; }
         #game-screen.mobile-pvp-layout #p2-unit-guide { display: none; }
+        #game-screen.mobile-pvp-layout #p1-box { display: none; }
+        #game-screen.mobile-pvp-layout #controls-text { display: none; }
+        #game-screen.mobile-pvp-layout .menu-btn[onclick="goToMenu()"] { font-size: 0.7em; padding: 5px; margin: 2px; }
         #game-screen.mobile-pvp-layout #mobile-p2-ui-container { display: flex; } /* Show the mobile P2 container */
 
         /* Ensure desktop P2 elements are visible in non-mobile PvP */

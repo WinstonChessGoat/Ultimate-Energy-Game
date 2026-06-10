@@ -273,18 +273,23 @@ function initGame(vsAI) {
 function setupMobileMirroredUI(container) {
     container.innerHTML = ''; // Clear previous clones
 
-    // 1. Clone the status boxes so P2 can see energy/HP
-    const gameContainerClone = document.getElementById('game-container').cloneNode(true);
-    gameContainerClone.id = 'game-container-mobile-clone';
+    // 1. Clone P1's box for P2 (so P2 sees their own stats at the top of their hand)
+    const p1BoxClone = document.getElementById('p1-box').cloneNode(true);
+    p1BoxClone.id = 'p2-box-mobile';
+    
+    // 2. Clone P2's box for P2 (so P2 sees opponent stats below their hand)
+    const p2BoxClone = document.getElementById('p2-box').cloneNode(true);
+    p2BoxClone.id = 'p1-box-mobile';
     
     // Recursively update IDs to prevent conflicts
     const suffixIds = (parent) => {
-        if (parent.id) parent.id += '-mobile';
+        if (parent.id && !parent.id.endsWith('-mobile')) parent.id += '-mobile';
         Array.from(parent.children).forEach(suffixIds);
     };
-    suffixIds(gameContainerClone);
+    suffixIds(p1BoxClone);
+    suffixIds(p2BoxClone);
 
-    // 2. Clone P1 unit guide to create P2 buttons
+    // 3. Clone P1 unit guide to create P2 buttons
     const p2Buttons = document.getElementById('p1-unit-guide').cloneNode(true);
     p2Buttons.id = 'p2-unit-guide-mobile';
     p2Buttons.classList.remove('hidden');
@@ -295,8 +300,9 @@ function setupMobileMirroredUI(container) {
         .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
 
     // Append in order so when rotated, buttons are at the "top" of the device for P2
+    container.appendChild(p1BoxClone); 
     container.appendChild(p2Buttons);
-    container.appendChild(gameContainerClone);
+    container.appendChild(p2BoxClone);
 }
 
 function goToMenu() {
