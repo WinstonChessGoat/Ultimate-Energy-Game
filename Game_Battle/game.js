@@ -244,9 +244,9 @@ function initGame(vsAI) {
         mobileP1Container.classList.remove('hidden');
         setupMobilePlayerUI(mobileP1Container, localRole, true);
         
-        // Setup Opponent UI at the top (Show buttons for Local PvP and VS AI)
+        // Setup Opponent UI at the top (Only show buttons for Local PvP)
         mobileContainer.classList.remove('hidden');
-        const showOpponentButtons = !isOnlineMode;
+        const showOpponentButtons = (!vsAI && !isOnlineMode);
         setupMobilePlayerUI(mobileContainer, remoteRole, showOpponentButtons);
 
         p1UnitGuide.classList.add('hidden'); // Hide original keyboard-centric guide
