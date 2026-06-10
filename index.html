@@ -176,25 +176,27 @@
             #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
                 display: grid !important;
                 grid-template-columns: repeat(5, 1fr) !important;
-                grid-template-rows: repeat(2, 1fr) !important;
-                gap: 3px !important;
-                width: 100%;
-                margin-top: 10px !important;
-                margin-bottom: 5px !important;
+                grid-auto-rows: min-content;
+                gap: 4px !important;
+                width: 98%;
+                margin: 5px auto !important;
+                padding: 0;
             }
             .unit-card {
-                padding: 4px 1px !important;
-                min-height: 38px;
+                padding: 6px 2px !important;
+                min-height: 40px;
                 box-shadow: 0 2px 0 #000;
+                display: flex;
+                justify-content: center;
             }
-            .unit-card span { font-size: 0.55em; line-height: 1.1; }
+            .unit-card span { font-size: 0.6em; line-height: 1.1; }
             .unit-card small { display: none; } /* Hide keybinds on mobile to save space */
             
             /* Shrink arena elements to fit more on screen */
-            .player-box { padding: 4px; width: 45%; margin: 0; border-width: 1px; }
-            .player-box h2 { font-size: 0.8em; margin: 1px 0; }
-            .energy-count { font-size: 1.2em; }
-            #battle-log { height: 80px; font-size: 0.7em; width: 95%; }
+            .player-box { padding: 3px; width: 46%; margin: 0; border-width: 1px; }
+            .player-box h2 { font-size: 0.7em; margin: 2px 0; }
+            .energy-count { font-size: 1.1em; }
+            #battle-log { height: 70px; font-size: 0.65em; width: 95%; margin: 5px 0; }
             #timer-display { font-size: 1em; height: 20px; margin-bottom: 5px; }
             h1 { font-size: 1em; margin: 2px 0; }
             .menu-btn { padding: 6px 12px; font-size: 0.8em; margin: 4px; }
@@ -556,11 +558,11 @@
 
         /* Ensure unit cards and player boxes are centered within their containers */
         .mobile-pvp-layout .unit-guide-container {
-            width: 100%;
+            width: 98%;
             display: grid !important;
             grid-template-columns: repeat(5, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-            gap: 4px;
+            gap: 5px;
+            margin: 5px auto;
         }
         .mobile-pvp-layout .player-box {
             width: auto; /* Allow player box to shrink/grow */
