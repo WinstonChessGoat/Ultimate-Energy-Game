@@ -233,18 +233,28 @@ function initGame(vsAI) {
     const p2Guide = document.getElementById('p2-unit-guide');
     p2Guide.classList.add('hidden');
 
-    // Mobile Mirrored Layout for Local PvP
-    if (!vsAI && !isOnlineMode && isMobile()) {
+    // Mobile UI setup for all modes (VS AI, Local PvP, Online)
+    if (isMobile()) {
         gameScreen.classList.add('mobile-pvp-layout');
-        mobileContainer.classList.remove('hidden');
-        mobileP1Container.classList.remove('hidden');
         
-        setupMobilePlayerUI(mobileContainer, 'p2'); // Player 2 at the top (flipped)
-        setupMobilePlayerUI(mobileP1Container, 'p1'); // Player 1 at the bottom
-    } else if (!vsAI && !isOnlineMode) {
-        // Desktop PvP: Use the same layout as VS AI. 
-        // P1 unit guide is visible, P2 guide is hidden.
-        p2Guide.classList.add('hidden');
+        const localRole = isOnlineMode ? myRole : 'p1';
+        const remoteRole = localRole === 'p1' ? 'p2' : 'p1';
+
+        // Setup Local Player UI at the bottom
+        mobileP1Container.classList.remove('hidden');
+        setupMobilePlayerUI(mobileP1Container, localRole, true);
+        
+        // Setup Opponent UI at the top (Only show buttons for Local PvP)
+        mobileContainer.classList.remove('hidden');
+        const showOpponentButtons = (!vsAI && !isOnlineMode);
+        setupMobilePlayerUI(mobileContainer, remoteRole, showOpponentButtons);
+
+        p1UnitGuide.classList.add('hidden'); // Hide original keyboard-centric guide
+    } else {
+        if (!vsAI && !isOnlineMode) {
+            // Desktop PvP: Hide the secondary unit guide
+            p2Guide.classList.add('hidden');
+        }
     }
 
     if (isOnlineMode) {
@@ -273,7 +283,7 @@ function initGame(vsAI) {
     resetGame();
 }
 
-function setupMobilePlayerUI(container, playerStr) {
+function setupMobilePlayerUI(container, playerStr, showButtons = true) {
     container.innerHTML = '';
 
     // 1. Clone the player info box (Energy, Score, Status)
@@ -290,33 +300,36 @@ function setupMobilePlayerUI(container, playerStr) {
     suffixer(boxClone);
 
     // 2. Clone the unit buttons
-    const originalGuide = document.getElementById('p1-unit-guide');
-    if (!originalGuide) return;
-    
-    const guideClone = originalGuide.cloneNode(true);
-    guideClone.id = `${playerStr}-unit-guide-mobile`;
-    guideClone.classList.remove('hidden');
-    guideClone.className = 'unit-guide-container';
+    let guideClone = null;
+    if (showButtons) {
+        const originalGuide = document.getElementById('p1-unit-guide');
+        if (originalGuide) {
+            guideClone = originalGuide.cloneNode(true);
+            guideClone.id = `${playerStr}-unit-guide-mobile`;
+            guideClone.classList.remove('hidden');
+            guideClone.className = 'unit-guide-container';
 
-    // Fix button IDs and click handlers for the specific player
-    const cards = guideClone.querySelectorAll('.unit-card');
-    cards.forEach((card, index) => {
-        const unitId = index + 1;
-        if (unitId <= 9) {
-            card.id = `${playerStr}-unit-btn-mobile-${unitId}`;
-            card.setAttribute('onclick', `handleUnitClick('${playerStr}', ${unitId})`);
-        } else {
-            card.setAttribute('onclick', 'requestRestart()');
+            // Fix button IDs and click handlers for the specific player
+            const cards = guideClone.querySelectorAll('.unit-card');
+            cards.forEach((card, index) => {
+                const unitId = index + 1;
+                if (unitId <= 9) {
+                    card.id = `${playerStr}-unit-btn-mobile-${unitId}`;
+                    card.setAttribute('onclick', `handleUnitClick('${playerStr}', ${unitId})`);
+                } else {
+                    card.setAttribute('onclick', 'requestRestart()');
+                }
+            });
         }
-    });
+    }
 
     // 3. Assemble: Mirror layout puts buttons closest to the player's thumbs at the screen edges
     if (playerStr === 'p2') {
-        container.appendChild(guideClone);
+        if (guideClone) container.appendChild(guideClone);
         container.appendChild(boxClone);
     } else {
         container.appendChild(boxClone);
-        container.appendChild(guideClone);
+        if (guideClone) container.appendChild(guideClone);
     }
 }
 
