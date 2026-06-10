@@ -173,7 +173,7 @@
         /* Mobile Specific Adjustments */
         @media (max-width: 600px) {
             body { padding: 5px; height: 100dvh; overflow: hidden; justify-content: space-between; }
-            #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
+            #p1-unit-guide, #p2-unit-guide, [id$="-unit-guide-mobile"] {
                 display: grid !important;
                 grid-template-columns: repeat(5, 1fr) !important;
                 grid-auto-rows: min-content;
@@ -405,6 +405,7 @@
         <div id="game-screen-content">
             <!-- This div will be dynamically populated for mobile PvP -->
             <div id="mobile-p2-ui-container" class="hidden"></div>
+            <div id="mobile-p1-ui-container" class="hidden"></div>
 
             <!-- Player 2 Controls (Top, Rotated) - Used for Desktop PvP -->
             <div id="p2-unit-guide" class="unit-guide-container hidden">
@@ -526,26 +527,37 @@
             max-width: 400px; /* Limit log width */
         }
 
-        .mobile-pvp-layout #p1-unit-guide {
-            display: grid !important;
-            margin-top: auto !important;
-            padding-top: 10px;
-            border-top: 2px dashed #333;
-        }
-
-        /* Ensure unit cards and player boxes are centered within their containers */
-        .mobile-pvp-layout .player-box {
-            width: auto; /* Allow player box to shrink/grow */
-            max-width: 250px;
-        }
-
         /* Hide desktop P2 elements in mobile PvP */
         #game-screen.mobile-pvp-layout #p2-box { display: none; }
         #game-screen.mobile-pvp-layout #p2-unit-guide { display: none; }
         #game-screen.mobile-pvp-layout #p1-box { display: none; }
+        #game-screen.mobile-pvp-layout #p1-unit-guide { display: none !important; }
         #game-screen.mobile-pvp-layout #controls-text { display: none; }
         #game-screen.mobile-pvp-layout .menu-btn[onclick="goToMenu()"] { font-size: 0.7em; padding: 5px; margin: 2px; }
-        #game-screen.mobile-pvp-layout #mobile-p2-ui-container { display: flex; } /* Show the mobile P2 container */
+        
+        .mobile-pvp-layout #mobile-p2-ui-container {
+            display: flex; 
+            transform: rotate(180deg);
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 3px;
+        }
+
+        .mobile-pvp-layout #mobile-p1-ui-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 3px;
+        }
+
+        .mobile-pvp-layout .unit-guide-container {
+            display: grid !important;
+            grid-template-columns: repeat(5, 1fr) !important;
+            grid-auto-rows: min-content;
+            gap: 3px;
+            width: 99%;
+            margin: 2px auto;
+        }
 
         /* Ensure desktop P2 elements are visible in non-mobile PvP */
         #game-screen:not(.mobile-pvp-layout) #p2-box { display: block; }

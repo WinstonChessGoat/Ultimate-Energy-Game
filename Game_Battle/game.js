@@ -214,12 +214,15 @@ function initGame(vsAI) {
     isAIMode = vsAI;
     const gameScreen = document.getElementById('game-screen');
     const mobileContainer = document.getElementById('mobile-p2-ui-container');
+    const mobileP1Container = document.getElementById('mobile-p1-ui-container');
     const p1UnitGuide = document.getElementById('p1-unit-guide');
     
     // Reset UI states
     gameScreen.classList.remove('mobile-pvp-layout');
     mobileContainer.classList.add('hidden');
+    mobileP1Container.classList.add('hidden');
     mobileContainer.innerHTML = '';
+    mobileP1Container.innerHTML = '';
 
     document.getElementById('menu-screen').classList.add('hidden');
     gameScreen.classList.remove('hidden');
@@ -234,7 +237,10 @@ function initGame(vsAI) {
     if (!vsAI && !isOnlineMode && isMobile()) {
         gameScreen.classList.add('mobile-pvp-layout');
         mobileContainer.classList.remove('hidden');
-        setupMobileMirroredUI(mobileContainer);
+        mobileP1Container.classList.remove('hidden');
+        
+        setupMobilePlayerUI(mobileContainer, 'p2'); // Player 2 at the top (flipped)
+        setupMobilePlayerUI(mobileP1Container, 'p1'); // Player 1 at the bottom
     } else if (!vsAI && !isOnlineMode) {
         // Desktop PvP: Use the same layout as VS AI. 
         // P1 unit guide is visible, P2 guide is hidden.
@@ -267,42 +273,51 @@ function initGame(vsAI) {
     resetGame();
 }
 
-/**
- * Clones the player boxes and unit guide for the flipped mobile player view.
- */
-function setupMobileMirroredUI(container) {
-    container.innerHTML = ''; // Clear previous clones
+function setupMobilePlayerUI(container, playerStr) {
+    container.innerHTML = '';
 
-    // 1. Clone P1's box for P2 (so P2 sees their own stats at the top of their hand)
-    const p1BoxClone = document.getElementById('p1-box').cloneNode(true);
-    p1BoxClone.id = 'p2-box-mobile';
+    // 1. Clone the player info box (Energy, Score, Status)
+    const boxId = playerStr === 'p1' ? 'p1-box' : 'p2-box';
+    const originalBox = document.getElementById(boxId);
+    if (!originalBox) return;
     
-    // 2. Clone P2's box for P2 (so P2 sees opponent stats below their hand)
-    const p2BoxClone = document.getElementById('p2-box').cloneNode(true);
-    p2BoxClone.id = 'p1-box-mobile';
-    
-    // Recursively update IDs to prevent conflicts
-    const suffixIds = (parent) => {
-        if (parent.id && !parent.id.endsWith('-mobile')) parent.id += '-mobile';
-        Array.from(parent.children).forEach(suffixIds);
+    const boxClone = originalBox.cloneNode(true);
+    // Suffix IDs inside the box for updateUI to find them (e.g., p1-energy-mobile)
+    const suffixer = (el) => {
+        if (el.id) el.id = el.id + '-mobile';
+        Array.from(el.children).forEach(suffixer);
     };
-    suffixIds(p1BoxClone);
-    suffixIds(p2BoxClone);
+    suffixer(boxClone);
 
-    // 3. Clone P1 unit guide to create P2 buttons
-    const p2Buttons = document.getElementById('p1-unit-guide').cloneNode(true);
-    p2Buttons.id = 'p2-unit-guide-mobile';
-    p2Buttons.classList.remove('hidden');
+    // 2. Clone the unit buttons
+    const originalGuide = document.getElementById('p1-unit-guide');
+    if (!originalGuide) return;
     
-    // Replace P1 click handlers with P2 click handlers in the cloned buttons
-    p2Buttons.innerHTML = p2Buttons.innerHTML
-        .replace(/p1-unit-btn-/g, 'p2-unit-btn-mobile-')
-        .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
+    const guideClone = originalGuide.cloneNode(true);
+    guideClone.id = `${playerStr}-unit-guide-mobile`;
+    guideClone.classList.remove('hidden');
+    guideClone.className = 'unit-guide-container';
 
-    // Append in order so when rotated, buttons are at the "top" of the device for P2
-    container.appendChild(p1BoxClone); 
-    container.appendChild(p2Buttons);
-    container.appendChild(p2BoxClone);
+    // Fix button IDs and click handlers for the specific player
+    const cards = guideClone.querySelectorAll('.unit-card');
+    cards.forEach((card, index) => {
+        const unitId = index + 1;
+        if (unitId <= 9) {
+            card.id = `${playerStr}-unit-btn-mobile-${unitId}`;
+            card.setAttribute('onclick', `handleUnitClick('${playerStr}', ${unitId})`);
+        } else {
+            card.setAttribute('onclick', 'requestRestart()');
+        }
+    });
+
+    // 3. Assemble: Mirror layout puts buttons closest to the player's thumbs at the screen edges
+    if (playerStr === 'p2') {
+        container.appendChild(guideClone);
+        container.appendChild(boxClone);
+    } else {
+        container.appendChild(boxClone);
+        container.appendChild(guideClone);
+    }
 }
 
 function goToMenu() {
@@ -581,6 +596,7 @@ function updateUI() {
     const p1Name = document.getElementById('p1-display-name');
     const p1Energy = document.getElementById('p1-energy');
     const p1ScoreEl = document.getElementById('p1-score');
+    const p1ScoreMob = document.getElementById('p1-score-mobile');
     const p1EnergyMob = document.getElementById('p1-energy-mobile');
     const p1NameMob = document.getElementById('p1-display-name-mobile');
     
@@ -590,6 +606,7 @@ function updateUI() {
     if (p1Energy) p1Energy.innerText = p1.energy;
     if (p1EnergyMob) p1EnergyMob.innerText = p1.energy;
     if (p1ScoreEl) p1ScoreEl.innerText = p1Score;
+    if (p1ScoreMob) p1ScoreMob.innerText = p1Score;
 
     // Player 2 UI
     const p2Name = document.getElementById('p2-display-name');
@@ -610,8 +627,11 @@ function updateUI() {
         
         const p2Btn = document.getElementById(`p2-unit-btn-${id}`);
         const p2BtnMobile = document.getElementById(`p2-unit-btn-mobile-${id}`);
+        const p1BtnMobile = document.getElementById(`p1-unit-btn-mobile-${id}`);
+
         if (p2Btn) p2Btn.classList.toggle('disabled', UNITS[id].cost > p2.energy);
         if (p2BtnMobile) p2BtnMobile.classList.toggle('disabled', UNITS[id].cost > p2.energy);
+        if (p1BtnMobile) p1BtnMobile.classList.toggle('disabled', UNITS[id].cost > p1.energy);
     }
 
     // World Screen Sync
