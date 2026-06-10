@@ -318,6 +318,14 @@
     <!-- World Screen -->
     <div id="world-screen" class="hidden" style="position: relative;">
         <div style="text-align: center;">
+            <!-- Perspective Switchers -->
+            <div id="pov-container" style="position: absolute; top: 10px; left: 10px; display: flex; gap: 5px; z-index: 1300;">
+                <button class="menu-btn" style="padding: 10px 15px; font-size: 0.9em; background: rgba(0, 255, 204, 0.5); border: 1px solid #00ffcc; color: white;" onclick="setPOV(1)">1</button>
+                <button class="menu-btn" style="padding: 10px 15px; font-size: 0.9em; background: rgba(0, 255, 204, 0.5); border: 1px solid #00ffcc; color: white;" onclick="setPOV(2)">2</button>
+                <button class="menu-btn" style="padding: 10px 15px; font-size: 0.9em; background: rgba(0, 255, 204, 0.5); border: 1px solid #00ffcc; color: white;" onclick="setPOV(3)">3</button>
+                <div style="font-size: 0.7em; align-self: center; color: #00ffcc; margin-left: 5px; text-shadow: 1px 1px 2px black;">POV</div>
+            </div>
+
             <canvas id="worldCanvas" width="800" height="500" style="border: 4px solid #333; background: #0a2f0a; border-radius: 10px;"></canvas>
             <div id="joystick-container">
                 <div id="joystick-handle"></div>
@@ -458,14 +466,16 @@
         .mobile-pvp-layout #mobile-p2-ui-container {
             order: 1; /* P2's arena part */
             transform: rotate(180deg);
-            display: flex; /* To arrange box and unit guide */
+            display: flex;
             flex-direction: column;
             align-items: center;
-            padding-bottom: 10px; /* Space between P2 and central elements */
+            padding-bottom: 20px;
+            border-bottom: 2px dashed #333;
         }
-        .mobile-pvp-layout #mobile-p2-ui-container .player-box,
-        .mobile-pvp-layout #mobile-p2-ui-container .unit-guide-container {
-            margin-top: 10px; /* Space between box and unit guide */
+        
+        /* Hide the original boxes in the center when in mobile mirrored mode */
+        .mobile-pvp-layout #main-arena #game-container {
+            display: none;
         }
 
         .mobile-pvp-layout #main-arena {
@@ -475,7 +485,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 10px 0;
+            padding: 5px 0;
         }
         .mobile-pvp-layout #game-container {
             flex-direction: column; /* Stack P1 and P2 boxes if they were both in main-arena */
@@ -492,7 +502,8 @@
 
         .mobile-pvp-layout #p1-unit-guide {
             order: 3; /* P1's arena part */
-            padding-top: 10px; /* Space between P1 and central elements */
+            padding-top: 20px;
+            border-top: 2px dashed #333;
         }
         .mobile-pvp-layout #controls-text {
             order: 4;

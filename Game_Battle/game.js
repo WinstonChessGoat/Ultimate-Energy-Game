@@ -214,6 +214,7 @@ function initGame(vsAI) {
     isAIMode = vsAI;
     const gameScreen = document.getElementById('game-screen');
     const mobileContainer = document.getElementById('mobile-p2-ui-container');
+    const p1UnitGuide = document.getElementById('p1-unit-guide');
     
     // Reset UI states
     gameScreen.classList.remove('mobile-pvp-layout');
@@ -222,7 +223,7 @@ function initGame(vsAI) {
 
     document.getElementById('menu-screen').classList.add('hidden');
     gameScreen.classList.remove('hidden');
-    document.getElementById('p1-unit-guide').classList.remove('hidden');
+    p1UnitGuide.classList.remove('hidden');
     
     const p1Name = document.getElementById('p1-display-name');
     const p2Name = document.getElementById('p2-display-name');
@@ -235,7 +236,9 @@ function initGame(vsAI) {
         mobileContainer.classList.remove('hidden');
         setupMobileMirroredUI(mobileContainer);
     } else if (!vsAI && !isOnlineMode) {
-        // Desktop PvP Setup: Keyboard keys are used; mirrored on-screen buttons are removed.
+        // Desktop PvP: Use the same layout as VS AI. 
+        // P1 unit guide is visible, P2 guide is hidden.
+        p2Guide.classList.add('hidden');
     }
 
     if (isOnlineMode) {
@@ -268,34 +271,32 @@ function initGame(vsAI) {
  * Clones the player boxes and unit guide for the flipped mobile player view.
  */
 function setupMobileMirroredUI(container) {
-    // Clone Boxes for results visibility
-    const p1Box = document.getElementById('p1-box').cloneNode(true);
-    const p2Box = document.getElementById('p2-box').cloneNode(true);
+    container.innerHTML = ''; // Clear previous clones
+
+    // 1. Clone the status boxes so P2 can see energy/HP
+    const gameContainerClone = document.getElementById('game-container').cloneNode(true);
+    gameContainerClone.id = 'game-container-mobile-clone';
     
-    // Map internal IDs to -mobile variants for sync logic
-    const mapIds = (el, p) => {
-        el.id = `${p}-box-mobile`;
-        el.querySelector(`#${p}-display-name`).id = `${p}-display-name-mobile`;
-        el.querySelector(`#${p}-energy`).id = `${p}-energy-mobile`;
-        el.querySelector(`#${p}-status`).id = `${p}-status-mobile`;
-        const score = el.querySelector(`#${p}-score-container`);
-        if (score) score.id = `${p}-score-container-mobile`;
+    // Recursively update IDs to prevent conflicts
+    const suffixIds = (parent) => {
+        if (parent.id) parent.id += '-mobile';
+        Array.from(parent.children).forEach(suffixIds);
     };
+    suffixIds(gameContainerClone);
 
-    mapIds(p1Box, 'p1');
-    mapIds(p2Box, 'p2');
-
-    // Duplicate Unit Guide for P2 interaction
-    const p2Guide = document.getElementById('p1-unit-guide').cloneNode(true);
-    p2Guide.id = 'p2-unit-guide-mobile';
-    p2Guide.classList.remove('hidden');
-    p2Guide.innerHTML = p2Guide.innerHTML
+    // 2. Clone P1 unit guide to create P2 buttons
+    const p2Buttons = document.getElementById('p1-unit-guide').cloneNode(true);
+    p2Buttons.id = 'p2-unit-guide-mobile';
+    p2Buttons.classList.remove('hidden');
+    
+    // Replace P1 click handlers with P2 click handlers in the cloned buttons
+    p2Buttons.innerHTML = p2Buttons.innerHTML
         .replace(/p1-unit-btn-/g, 'p2-unit-btn-mobile-')
         .replace(/handleUnitClick\('p1'/g, "handleUnitClick('p2'");
 
-    container.appendChild(p1Box);
-    container.appendChild(p2Box);
-    container.appendChild(p2Guide);
+    // Append in order so when rotated, buttons are at the "top" of the device for P2
+    container.appendChild(p2Buttons);
+    container.appendChild(gameContainerClone);
 }
 
 function goToMenu() {

@@ -81,6 +81,13 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+/**
+ * Updates the current point of view (perspective)
+ */
+function setPOV(n) {
+    currentPOV = n;
+}
+
 window.addEventListener('keyup', (e) => {
     const key = e.key.toLowerCase();
     if (isInWorld && movement[key] !== undefined) {
