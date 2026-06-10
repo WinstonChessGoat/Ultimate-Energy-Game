@@ -169,6 +169,7 @@
         /* Mobile Specific Adjustments */
         @media (max-width: 600px) {
             #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
+                display: grid !important;
                 grid-template-columns: repeat(5, 1fr) !important;
                 gap: 4px !important;
                 width: 100%;
@@ -184,7 +185,7 @@
             /* Shrink arena elements to fit more on screen */
             .player-box { padding: 8px; width: 120px; }
             .energy-count { font-size: 1.5em; }
-            #battle-log { height: 120px; font-size: 0.8em; }
+            #battle-log { height: 80px; font-size: 0.75em; }
             h1 { font-size: 1.2em; margin: 5px 0; }
             .menu-btn { padding: 10px 15px; font-size: 1em; }
         }
@@ -542,9 +543,9 @@
         /* Ensure unit cards and player boxes are centered within their containers */
         .mobile-pvp-layout .unit-guide-container {
             width: 100%;
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
+            display: grid !important;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
         }
         .mobile-pvp-layout .player-box {
             width: auto; /* Allow player box to shrink/grow */
