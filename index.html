@@ -125,10 +125,11 @@
         #p1-unit-guide, #p2-unit-guide {
             margin-top: 30px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
             width: 95%;
             max-width: 900px;
+            justify-content: center;
         }
         #p2-unit-guide {
             transform: rotate(180deg);
@@ -164,6 +165,30 @@
             pointer-events: none; 
             filter: grayscale(1);
         }
+
+        /* Mobile Specific Adjustments */
+        @media (max-width: 600px) {
+            #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
+                grid-template-columns: repeat(5, 1fr) !important;
+                gap: 4px !important;
+                width: 100%;
+            }
+            .unit-card {
+                padding: 6px 2px !important;
+                min-height: 45px;
+                box-shadow: 0 2px 0 #000;
+            }
+            .unit-card span { font-size: 0.65em; line-height: 1.1; }
+            .unit-card small { display: none; } /* Hide keybinds on mobile to save space */
+            
+            /* Shrink arena elements to fit more on screen */
+            .player-box { padding: 8px; width: 120px; }
+            .energy-count { font-size: 1.5em; }
+            #battle-log { height: 120px; font-size: 0.8em; }
+            h1 { font-size: 1.2em; margin: 5px 0; }
+            .menu-btn { padding: 10px 15px; font-size: 1em; }
+        }
+
         .unit-card span { display: block; color: #00ffcc; font-weight: bold; }
         .unit-card small { color: #888; }
 
