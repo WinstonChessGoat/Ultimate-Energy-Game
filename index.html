@@ -168,26 +168,32 @@
 
         /* Mobile Specific Adjustments */
         @media (max-width: 600px) {
+            body { padding: 5px; height: 100dvh; overflow: hidden; justify-content: flex-start; }
             #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
                 display: grid !important;
-                grid-template-columns: repeat(5, 1fr) !important;
-                gap: 4px !important;
+                grid-template-columns: repeat(5, 1fr) !important; /* 5 columns = 2 rows for 10 buttons */
+                gap: 3px !important;
                 width: 100%;
+                margin-top: 10px !important;
+                margin-bottom: 5px !important;
             }
             .unit-card {
-                padding: 6px 2px !important;
-                min-height: 45px;
+                padding: 4px 1px !important;
+                min-height: 40px;
                 box-shadow: 0 2px 0 #000;
             }
-            .unit-card span { font-size: 0.65em; line-height: 1.1; }
+            .unit-card span { font-size: 0.6em; line-height: 1.1; }
             .unit-card small { display: none; } /* Hide keybinds on mobile to save space */
             
             /* Shrink arena elements to fit more on screen */
-            .player-box { padding: 8px; width: 120px; }
-            .energy-count { font-size: 1.5em; }
-            #battle-log { height: 80px; font-size: 0.75em; }
-            h1 { font-size: 1.2em; margin: 5px 0; }
-            .menu-btn { padding: 10px 15px; font-size: 1em; }
+            .player-box { padding: 4px; width: 45%; margin: 0; border-width: 1px; }
+            .player-box h2 { font-size: 0.9em; margin: 2px 0; }
+            .energy-count { font-size: 1.2em; }
+            #battle-log { height: 70px; font-size: 0.7em; width: 95%; }
+            h1 { font-size: 1em; margin: 2px 0; }
+            .menu-btn { padding: 6px 12px; font-size: 0.8em; margin: 4px; }
+            #main-arena { gap: 10px; }
+            #game-container { gap: 5px; }
         }
 
         .unit-card span { display: block; color: #00ffcc; font-weight: bold; }
