@@ -130,6 +130,7 @@
             margin-top: 10px;
             display: grid;
             grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(2, 70px);
             gap: 5px;
             width: 95%;
             max-width: 900px;
@@ -145,7 +146,7 @@
         }
         .unit-card {
             background: #1e1e1e;
-            padding: 12px 8px;
+            padding: 4px;
             border-radius: 10px;
             border: 2px solid #444;
             font-size: 0.9em;
@@ -160,6 +161,8 @@
             text-align: center;
             box-shadow: 0 4px 0 #000;
             opacity: 1;
+            height: 100%;
+            box-sizing: border-box;
         }
         .unit-card:hover { border-color: #00ffcc; background: #252525; }
         .unit-card:active { transform: translateY(3px); box-shadow: 0 1px 0 #000; }
@@ -176,7 +179,8 @@
             #p1-unit-guide, #p2-unit-guide, [id$="-unit-guide-mobile"] {
                 display: grid !important;
                 grid-template-columns: repeat(5, 1fr) !important;
-                grid-auto-rows: min-content;
+                grid-template-rows: repeat(2, 45px) !important;
+                grid-auto-rows: unset !important;
                 gap: 4px !important;
                 width: 98%;
                 margin: 5px auto !important;
@@ -184,7 +188,7 @@
             }
             .unit-card {
                 padding: 6px 2px !important;
-                min-height: 40px;
+                height: 100% !important;
                 box-shadow: 0 2px 0 #000;
                 display: flex;
                 justify-content: center;
@@ -553,7 +557,8 @@
         .mobile-pvp-layout .unit-guide-container {
             display: grid !important;
             grid-template-columns: repeat(5, 1fr) !important;
-            grid-auto-rows: min-content;
+            grid-template-rows: repeat(2, 45px) !important;
+            grid-auto-rows: unset !important;
             gap: 3px;
             width: 99%;
             margin: 2px auto;
