@@ -120,6 +120,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
+            height: 100%;
+            justify-content: space-between;
+            box-sizing: border-box;
         }
 
         #p1-unit-guide, #p2-unit-guide {
@@ -168,10 +172,11 @@
 
         /* Mobile Specific Adjustments */
         @media (max-width: 600px) {
-            body { padding: 5px; height: 100dvh; overflow: hidden; justify-content: flex-start; }
+            body { padding: 5px; height: 100dvh; overflow: hidden; justify-content: space-between; }
             #p1-unit-guide, #p2-unit-guide, #p2-unit-guide-mobile {
                 display: grid !important;
-                grid-template-columns: repeat(5, 1fr) !important; /* 5 columns = 2 rows for 10 buttons */
+                grid-template-columns: repeat(5, 1fr) !important;
+                grid-template-rows: repeat(2, 1fr) !important;
                 gap: 3px !important;
                 width: 100%;
                 margin-top: 10px !important;
@@ -179,17 +184,18 @@
             }
             .unit-card {
                 padding: 4px 1px !important;
-                min-height: 40px;
+                min-height: 38px;
                 box-shadow: 0 2px 0 #000;
             }
-            .unit-card span { font-size: 0.6em; line-height: 1.1; }
+            .unit-card span { font-size: 0.55em; line-height: 1.1; }
             .unit-card small { display: none; } /* Hide keybinds on mobile to save space */
             
             /* Shrink arena elements to fit more on screen */
             .player-box { padding: 4px; width: 45%; margin: 0; border-width: 1px; }
-            .player-box h2 { font-size: 0.9em; margin: 2px 0; }
+            .player-box h2 { font-size: 0.8em; margin: 1px 0; }
             .energy-count { font-size: 1.2em; }
-            #battle-log { height: 70px; font-size: 0.7em; width: 95%; }
+            #battle-log { height: 80px; font-size: 0.7em; width: 95%; }
+            #timer-display { font-size: 1em; height: 20px; margin-bottom: 5px; }
             h1 { font-size: 1em; margin: 2px 0; }
             .menu-btn { padding: 6px 12px; font-size: 0.8em; margin: 4px; }
             #main-arena { gap: 10px; }
@@ -432,49 +438,49 @@
             </div>
             <button class="menu-btn" style="background: #ff4444; margin-top: 20px;" onclick="goToMenu()">Back to Menu</button>
         </div>
-    </div>
 
-    <!-- Player 1 Controls (Bottom) -->
-    <div id="p1-unit-guide" class="hidden">
-        <div class="unit-card" id="p1-unit-btn-1" onclick="handleUnitClick('p1', 1)">
-            <span>1. Charge</span>
-            <small>Cost: 0 | P1: [Q] | P2: [1]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-2" onclick="handleUnitClick('p1', 2)">
-            <span>2. Fireball</span>
-            <small>Cost: 1 | P1: [W] | P2: [2]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-3" onclick="handleUnitClick('p1', 3)">
-            <span>3. Tornado</span>
-            <small>Cost: 2 | P1: [E] | P2: [3]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-4" onclick="handleUnitClick('p1', 4)">
-            <span>4. Earthquake</span>
-            <small>Cost: 3 | P1: [R] | P2: [4]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-5" onclick="handleUnitClick('p1', 5)">
-            <span>5. Tsunami</span>
-            <small>Cost: 4 | P1: [T] | P2: [5]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-6" onclick="handleUnitClick('p1', 6)">
-            <span>6. Blackhole</span>
-            <small>Cost: 5 | P1: [Y] | P2: [6]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-7" onclick="handleUnitClick('p1', 7)">
-            <span>7. Megashield</span>
-            <small>Cost: 10 | P1: [U] | P2: [7]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-8" onclick="handleUnitClick('p1', 8)">
-            <span>8. Ultimate</span>
-            <small>Cost: 12 | P1: [I] | P2: [8]</small>
-        </div>
-        <div class="unit-card" id="p1-unit-btn-9" onclick="handleUnitClick('p1', 9)">
-            <span>9. Guard</span>
-            <small>Cost: 0 | P1: [O] | P2: [9]</small>
-        </div>
-        <div class="unit-card" style="border-color: #ff4444;" onclick="requestRestart()">
-            <span>Restart</span>
-            <small>Key: [Enter]</small>
+        <!-- Player 1 Controls (Bottom) moved inside game-screen -->
+        <div id="p1-unit-guide" class="hidden">
+            <div class="unit-card" id="p1-unit-btn-1" onclick="handleUnitClick('p1', 1)">
+                <span>1. Charge</span>
+                <small>Cost: 0 | P1: [Q] | P2: [1]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-2" onclick="handleUnitClick('p1', 2)">
+                <span>2. Fireball</span>
+                <small>Cost: 1 | P1: [W] | P2: [2]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-3" onclick="handleUnitClick('p1', 3)">
+                <span>3. Tornado</span>
+                <small>Cost: 2 | P1: [E] | P2: [3]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-4" onclick="handleUnitClick('p1', 4)">
+                <span>4. Earthquake</span>
+                <small>Cost: 3 | P1: [R] | P2: [4]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-5" onclick="handleUnitClick('p1', 5)">
+                <span>5. Tsunami</span>
+                <small>Cost: 4 | P1: [T] | P2: [5]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-6" onclick="handleUnitClick('p1', 6)">
+                <span>6. Blackhole</span>
+                <small>Cost: 5 | P1: [Y] | P2: [6]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-7" onclick="handleUnitClick('p1', 7)">
+                <span>7. Megashield</span>
+                <small>Cost: 10 | P1: [U] | P2: [7]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-8" onclick="handleUnitClick('p1', 8)">
+                <span>8. Ultimate</span>
+                <small>Cost: 12 | P1: [I] | P2: [8]</small>
+            </div>
+            <div class="unit-card" id="p1-unit-btn-9" onclick="handleUnitClick('p1', 9)">
+                <span>9. Guard</span>
+                <small>Cost: 0 | P1: [O] | P2: [9]</small>
+            </div>
+            <div class="unit-card" style="border-color: #ff4444;" onclick="requestRestart()">
+                <span>Restart</span>
+                <small>Key: [Enter]</small>
+            </div>
         </div>
     </div>
 
@@ -501,7 +507,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding-bottom: 20px;
+            padding-bottom: 5px;
             border-bottom: 2px dashed #333;
         }
         
@@ -539,11 +545,13 @@
         }
         .mobile-pvp-layout #controls-text {
             order: 4;
-            margin-top: 10px;
+            margin-top: 5px;
+            font-size: 0.7em;
         }
         .mobile-pvp-layout .menu-btn[onclick="goToMenu()"] {
             order: 5;
-            margin-top: 10px;
+            margin-top: 5px;
+            padding: 5px 10px;
         }
 
         /* Ensure unit cards and player boxes are centered within their containers */
@@ -551,6 +559,7 @@
             width: 100%;
             display: grid !important;
             grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(2, 1fr);
             gap: 4px;
         }
         .mobile-pvp-layout .player-box {
