@@ -16,7 +16,13 @@ const port = process.env.PORT || 9000;
 // Initialize Database
 const db = new sqlite3.Database('./scores.db');
 db.serialize(() => {
-    db.run("CREATE TABLE IF NOT EXISTS scores (username TEXT PRIMARY KEY, score INTEGER)");
+    // Updated table to handle email accounts
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        email TEXT PRIMARY KEY, 
+        password TEXT, 
+        username TEXT, 
+        score INTEGER DEFAULT 0
+    )`);
 });
 
 app.use(express.json());
@@ -117,32 +123,44 @@ function broadcastToRoom(roomId, payload) {
     }
 }
 
-// Database API Routes
-app.get('/api/score/:username', (req, res) => {
-    const username = req.params.username;
-    db.get("SELECT score FROM scores WHERE username = ?", [username], (err, row) => {
+// Auth & Account API Routes
+app.post('/api/login', (req, res) => {
+    const { email, password, username } = req.body;
+    
+    // Simple "Login or Register" logic: 
+    // If user exists, check password. If not, create them.
+    db.get("SELECT * FROM users WHERE email = ?", [email], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ score: row ? row.score : 0 });
+
+        if (user) {
+            if (user.password === password) {
+                res.json({ success: true, username: user.username, score: user.score });
+            } else {
+                res.status(401).json({ error: "Invalid password" });
+            }
+        } else {
+            // Create new account
+            db.run("INSERT INTO users (email, password, username, score) VALUES (?, ?, ?, 0)", 
+                [email, password, username], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, username, score: 0 });
+            });
+        }
     });
 });
 
 app.get('/api/leaderboard', (req, res) => {
-    db.all("SELECT username, score FROM scores ORDER BY score DESC LIMIT 5", [], (err, rows) => {
+    db.all("SELECT username, score FROM users ORDER BY score DESC LIMIT 5", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
 app.post('/api/score', (req, res) => {
-    const { username, score } = req.body;
-    if (!username) return res.status(400).json({ error: "Username required" });
+    const { email, score } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
     
-    const sql = `INSERT INTO scores (username, score) 
-                 VALUES (?, ?) 
-                 ON CONFLICT(username) 
-                 DO UPDATE SET score = excluded.score`;
-                 
-    db.run(sql, [username, score], function(err) {
+    db.run("UPDATE users SET score = ? WHERE email = ?", [score, email], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });

@@ -223,6 +223,11 @@
             animation: spin 1s linear infinite; margin-bottom: 20px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn-spinner {
+            width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.1);
+            border-top: 2px solid black; border-radius: 50%;
+            animation: spin 0.8s linear infinite; display: inline-block; margin-left: 8px; vertical-align: middle;
+        }
         #loading-text { font-size: 1.2em; color: #00ffcc; letter-spacing: 1px; }
 
         #inventory-overlay-box {
@@ -314,9 +319,15 @@
 
     <div id="auth-screen">
         <h2>Sign In</h2>
-        <p style="color: #888;">Enter a username to save your score</p>
-        <input type="text" id="username-input" placeholder="Your Name">
-        <button class="menu-btn" style="background: #ffcc00;" onclick="handleSignIn()">Sign In</button>
+        <p style="color: #888;">Log in with your email to save progress</p>
+        <div id="auth-error" style="color: #ff4444; font-size: 0.9em; margin-bottom: 10px; min-height: 1.2em;"></div>
+        <input type="email" id="email-input" placeholder="Email Address">
+        <input type="text" id="username-input" placeholder="Display Name">
+        <input type="password" id="password-input" placeholder="Password">
+        <button id="signin-btn" class="menu-btn" style="background: #ffcc00;" onclick="handleSignIn()">
+            <span id="signin-btn-text">Sign In</span>
+            <div id="signin-spinner" class="btn-spinner hidden"></div>
+        </button>
     </div>
 
     <!-- Main Hub Screen -->

@@ -233,8 +233,9 @@ function initGame(vsAI) {
     const p2Guide = document.getElementById('p2-unit-guide');
     p2Guide.classList.add('hidden');
 
-    // Mobile UI setup for all modes (VS AI, Local PvP, Online)
-    if (isMobile()) {
+    // Mobile UI setup for Local PvP and Online modes.
+    // For Player vs AI on mobile, we use the standard computer layout as requested.
+    if (isMobile() && !vsAI) {
         gameScreen.classList.add('mobile-pvp-layout');
         
         const localRole = isOnlineMode ? myRole : 'p1';

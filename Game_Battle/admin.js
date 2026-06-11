@@ -42,32 +42,74 @@ async function deleteLocalScore(username) {
     transaction.objectStore(DB_STORE).delete(username);
 }
 
-async function handleSignIn() {
-    const input = document.getElementById('username-input');
-    const name = input.value.trim();
-    if (!name) return;
+async function handleSignIn(isAuto = false) {
+    const emailInput = document.getElementById('email-input');
+    const usernameInput = document.getElementById('username-input');
+    const passwordInput = document.getElementById('password-input');
+    const errorEl = document.getElementById('auth-error');
+    const btn = document.getElementById('signin-btn');
+    const btnText = document.getElementById('signin-btn-text');
+    const spinner = document.getElementById('signin-spinner');
+    
+    if (errorEl) errorEl.innerText = ""; // Clear any previous error messages
 
-    currentUser = name;
-    localStorage.setItem('ultimate_energy_current_session', currentUser);
+    const email = emailInput.value.trim();
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
 
-    try {
-        const response = await fetch(`${IS_PROD ? RENDER_URL : ''}/api/score/${currentUser}`);
-        const data = await response.json();
-        
-        // If server has the score, use it. Otherwise, check local IndexedDB.
-        if (data.score && data.score > 0) {
-            p1Score = data.score;
-        } else {
-            p1Score = await getLocalScore(currentUser);
+    if (!isAuto) {
+        if (!email || !password) {
+            alert("Email and Password are required.");
+            return;
         }
-    } catch (err) {
-        console.warn("Server score fetch failed, falling back to IndexedDB:", err);
-        p1Score = await getLocalScore(currentUser);
+        // Show loading state on button for manual login
+        if (btn) btn.disabled = true;
+        if (btnText) btnText.innerText = "Signing In...";
+        if (spinner) spinner.classList.remove('hidden');
     }
 
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('main-menu-screen').classList.remove('hidden');
-    document.getElementById('p1-display-name').innerText = currentUser;
+    // Store email as our primary key for the session
+    currentUser = email; 
+    localStorage.setItem('ultimate_energy_email', email);
+    localStorage.setItem('ultimate_energy_password', password);
+    localStorage.setItem('ultimate_energy_username', username);
+
+    try {
+        const response = await fetch(`${IS_PROD ? RENDER_URL : ''}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, username: username || email.split('@')[0] })
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+            p1Score = result.score;
+            document.getElementById('p1-display-name').innerText = result.username;
+            // In case of background sync, update the stored username
+            localStorage.setItem('ultimate_energy_username', result.username);
+            
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('main-menu-screen').classList.remove('hidden');
+            showLoading(false); // Hide the overlay spinner if it was shown
+        } else {
+            // If auto-login fails (e.g., password changed), bring them back to sign-in
+            if (isAuto) {
+                handleSignOut(false); // Silent sign out
+                showLoading(false);
+            } else if (errorEl) {
+                errorEl.innerText = result.error || "Login failed";
+            } else {
+                alert(result.error || "Login failed");
+            }
+        }
+    } catch (err) {
+        console.error("Login request failed:", err);
+    } finally {
+        // Reset loading state
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = "Sign In";
+        if (spinner) spinner.classList.add('hidden');
+    }
     updateScoreboard();
     updateUI();
 }
@@ -77,7 +119,7 @@ async function saveScoreToServer(username, score) {
     fetch(`${IS_PROD ? RENDER_URL : ''}/api/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, score })
+        body: JSON.stringify({ email: currentUser, score })
     }).catch(err => console.error("Database save failed:", err));
 }
 
@@ -157,12 +199,14 @@ async function updateScoreboard() {
 /**
  * Handles signing out the user and wiping their saved progress from storage.
  */
-async function handleSignOut() {
-    if (!confirm("Are you sure? This will sign you out and DELETE your saved score progress.")) return;
+async function handleSignOut(confirmOut = true) {
+    if (confirmOut && !confirm("Are you sure? This will sign you out and DELETE your saved score progress.")) return;
 
     if (currentUser) {
         await deleteLocalScore(currentUser);
-        localStorage.removeItem('ultimate_energy_current_session');
+        localStorage.removeItem('ultimate_energy_email');
+        localStorage.removeItem('ultimate_energy_password');
+        localStorage.removeItem('ultimate_energy_username');
     }
     
     currentUser = null;
@@ -206,9 +250,22 @@ function announce(text) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    const savedUser = localStorage.getItem('ultimate_energy_current_session');
-    if (savedUser) {
-        document.getElementById('username-input').value = savedUser;
-        handleSignIn();
+    const savedEmail = localStorage.getItem('ultimate_energy_email');
+    const savedPassword = localStorage.getItem('ultimate_energy_password');
+    const savedUsername = localStorage.getItem('ultimate_energy_username');
+    
+    if (savedEmail && savedPassword) {
+        // SHORTER TIME TO POP UP: Immediately hide the login screen
+        document.getElementById('auth-screen').classList.add('hidden');
+        document.getElementById('main-menu-screen').classList.remove('hidden');
+        
+        // Show the loading overlay so the user knows a background sync is happening
+        showLoading(true, "Syncing profile...");
+
+        // Populate UI with cached info so it doesn't look empty while we wait for the server
+        if (savedUsername) document.getElementById('p1-display-name').innerText = savedUsername;
+        
+        // Execute background login
+        handleSignIn(true);
     }
 });
